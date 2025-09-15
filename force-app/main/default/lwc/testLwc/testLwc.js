@@ -1,5 +1,9 @@
 import { LightningElement } from 'lwc';
 
-export default class TestLwc extends LightningElement {
-          
+export default class HelloWorld extends LightningElement {
+    message;
+
+    handleClick() {
+        this.message = 'Button clicked! LWC is working 🎉';
+    }
 }
