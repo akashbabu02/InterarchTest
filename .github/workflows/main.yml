@@ -99,7 +99,8 @@ jobs:
             $isChangesFound = $true
           }
           Write-host "Code Changes : $isChangesFound"
-          echo "isCodeChanges=$isChangesFound" >> $env:GITHUB_OUTPUT
+          $isChangesFoundStr = $isChangesFound.ToString().ToLower()
+          echo "isCodeChanges=$isChangesFoundStr" >> $env:GITHUB_OUTPUT
           
       # 8️⃣ Upload Delta as Artifact
       - name: Upload Delta as Artifact
