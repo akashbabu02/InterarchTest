@@ -16,23 +16,30 @@ jobs:
     environment: QA
 
     steps:
+      # 1️⃣ Checkout code
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # 2️⃣ Setup Node.js
       - name: 🧰 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 🛠️ Install Salesforce CLI and Plugins (sf + sfdx)
+      # 3️⃣ Install Salesforce CLI & Plugins
+      - name: 🛠️ Install Salesforce CLI and Plugins
         shell: bash
         run: |
           echo 'Installing sf CLI'
           npm install -g @salesforce/cli@latest
+          echo 'Installing sfdx-git-delta'
+          echo y | sfdx plugins:install sfdx-git-delta
 
+      # 4️⃣ Authenticate to Salesforce
       - name: 🔐 Authenticate with Salesforce (JWT Auth)
+        shell: bash
         run: |
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
@@ -41,7 +48,79 @@ jobs:
             --instance-url https://login.salesforce.com \
             --set-default
 
-      - name: 🚀 Deploy LWC changes to Salesforce
+      # 5️⃣ Get Last Successful Commit ID
+      - name: Get Last Successful Commit ID
+        id: get-commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branchName = `${{ github.event_name }}` === 'pull_request' ? `${{ github.event.pull_request.base.ref }}` : `${{ github.ref_name }}`;
+            console.log(`branchName : ${branchName}`)
+            const response = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              branch: branchName,
+              status: 'success',
+              per_page: 1
+            });
+
+            if (response.data.workflow_runs.length > 0) {
+              const lastSuccessfulCommitId = response.data.workflow_runs[0].head_sha;
+              console.log(`Last successful commit ID: ${lastSuccessfulCommitId}`);
+              return lastSuccessfulCommitId;
+            } else {
+              console.log('No successful runs found, using previous commit.');
+              const exec = require('child_process').execSync;
+              const previousCommitId = exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
+              console.log(`Previous commit ID: ${previousCommitId}`);
+              return previousCommitId;
+            }
+          result-encoding: string 
+
+      # 6️⃣ Store Last Commit ID
+      - name: Store Last Commit ID
+        run: echo "PREV_COMMIT_ID=${{ steps.get-commit.outputs.result }}" >> $GITHUB_ENV
+
+      # 7️⃣ Generate SFDX Git Delta
+      - name: Generate SFDX Git Delta
+        id: deltaChanges
+        shell: pwsh
         run: |
-          # Deploy all changes in force-app folder
-          sf project deploy start --source-dir force-app --target-org ${{ secrets.USER_NAME }} --wait 10 --verbose
+          $prevCommitId = "$env:PREV_COMMIT_ID"
+
+          Write-Host "Previous Commit ID : $prevCommitId"
+
+          mkdir delta
+          sfdx sgd:source:delta --from $prevCommitId --output delta/ --generate-delta
+
+          $isChangesFound = $false
+          $srcPath = "delta/src" 
+          if (Test-Path -Path $srcPath) { 
+            $isChangesFound = $true
+          }
+          Write-host "Code Changes : $isChangesFound"
+          echo "isCodeChanges=$isChangesFound" >> $env:GITHUB_OUTPUT
+          
+      # 8️⃣ Upload Delta as Artifact
+      - name: Upload Delta as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: salesforce-build-artifacts
+          path: |
+            delta/**  
+            Assets/**
+            pipeline_scripts/**
+            sfdx-project.json
+
+      # 9️⃣ Deploy Only If Changes Exist
+      - name: 🚀 Deploy Delta Changes
+        if: ${{ steps.deltaChanges.outputs.isCodeChanges == 'true' }}
+        shell: bash
+        run: |
+          TARGET_USERNAME="${{ secrets.USER_NAME }}"
+          if [ -f delta/package/package.xml ]; then
+            echo "Deploying delta package to $TARGET_USERNAME ..."
+            sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
+            sf project deploy report -r --json > deploymentOut.json
+          else
+            echo "⚡ No deployable changes detected."
