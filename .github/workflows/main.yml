@@ -38,8 +38,8 @@ jobs:
       - name: 🔐 Authenticate with Salesforce (JWT Auth)
         run: |
           sf org login jwt \
-            --client-id ${{ secrets.SF_JWT_KEY }} \
+            --client-id ${{ secrets.CONSUMER_KEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ secrets.SF_USERNAME }} \
+            --username ${{ secrets.USER_NAME }} \
             --instance-url https://login.salesforce.com \
             --set-default
