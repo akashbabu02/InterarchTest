@@ -1,4 +1,4 @@
-name: Salesforce Build Pipeline - QA
+name: Salesforce Build Pipeline - InterarchQA
  
 on:
   push:
