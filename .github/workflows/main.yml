@@ -168,7 +168,7 @@ jobs:
           fi
 
       - name: 🚀 Deploy Delta / LWC
-  shell: bash
+        shell: bash
   run: |
     TARGET_USERNAME="${{ secrets.USER_NAME }}"
 
