@@ -169,8 +169,8 @@ jobs:
 
       - name: 🚀 Deploy Delta / LWC
         shell: bash
-        run: |
-          TARGET_USERNAME="${{ secrets.USER_NAME}"
+        run: |   
+          TARGET_USERNAME="${{ secrets.USER_NAME}}"
 
           if [ -f delta/package/package.xml ]; then
             echo "📦 Deploying delta package..."
