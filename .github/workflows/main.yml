@@ -149,11 +149,13 @@ jobs:
         id: lwcChanges
         shell: bash
         run: |
-          git diff --name-only ${{ env.PREV_COMMIT_ID }} HEAD | grep "force-app/main/default/lwc" || true > lwc_changes.txt
-          if [ -s lwc_changes.txt ]; then
-            echo "isLwcChanges=true" >> $GITHUB_OUTPUT
-          else
-            echo "isLwcChanges=false" >> $GITHUB_OUTPUT
+         git diff --name-only HEAD | grep "force-app/main/default/lwc" || true > lwc_changes.txt
+         if [ -s lwc_changes.txt ]; then
+          echo "isLwcChanges=true" >> $GITHUB_OUTPUT
+         else
+          echo "isLwcChanges=false" >> $GITHUB_OUTPUT
+          fi
+
 
       - name: Salesforce Code Analyzer (Optional)
         shell: bash
