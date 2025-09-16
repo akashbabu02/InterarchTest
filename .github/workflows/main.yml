@@ -170,7 +170,7 @@ jobs:
       - name: 🚀 Deploy Delta / LWC
         shell: bash
         run: |
-          TARGET_USERNAME="${{ vars.QA_USERNAME }}"
+          TARGET_USERNAME="${{ vars.minuscule@interarch.com }}"
 
           if [ -f delta/package/package.xml ]; then
             echo "📦 Deploying delta package..."
