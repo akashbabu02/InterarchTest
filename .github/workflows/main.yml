@@ -168,15 +168,15 @@ jobs:
           fi
 
       - name: 🚀 Deploy Delta / LWC
-        shell: bash
-        run: |   
-          TARGET_USERNAME="${{ secrets.USER_NAME}}"
+  shell: bash
+  run: |
+    TARGET_USERNAME="${{ secrets.USER_NAME }}"
 
-          if [ -f delta/package/package.xml ]; then
-            echo "📦 Deploying delta package..."
-            sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
-          elif [ "${{ steps.lwcChanges.outputs.isLwcChanges }}" == "true" ]; then
-            echo "⚡ Delta empty but LWC changed, deploying full LWC folder..."
-            sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
-          else
-            echo "✅ No deployable changes found"
+    if [ -f delta/package/package.xml ]; then
+      echo "📦 Deploying delta package..."
+      sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
+    elif [ "${{ steps.lwcChanges.outputs.isLwcChanges }}" == "true" ]; then
+      echo "⚡ Delta empty but LWC changed, deploying full LWC folder..."
+      sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
+    else
+      echo "✅ No deployable changes found"
