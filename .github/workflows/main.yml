@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - build/QA
+  pull_request:
+    branches:
+      - build/QA
   workflow_dispatch:
 
 permissions:
@@ -11,7 +14,69 @@ permissions:
   pull-requests: write
 
 jobs:
-  salesforce-deploy:
+  # 🔍 Validation job for Pull Requests
+  validate-on-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: ⬇️ Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2️⃣ Setup Node.js
+      - name: 🧰 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3️⃣ Install Salesforce CLI & Plugins
+      - name: 🛠️ Install Salesforce CLI and Plugins
+        run: |
+          npm install -g @salesforce/cli@latest
+          echo y | sfdx plugins:install sfdx-git-delta
+
+      # 4️⃣ Authenticate Salesforce
+      - name: 🔐 Authenticate Salesforce
+        run: |
+          sf org login jwt \
+            --client-id ${{ secrets.CONSUMER_KEY }} \
+            --jwt-key-file asset/server.key \
+            --username ${{ secrets.USER_NAME }} \
+            --instance-url https://login.salesforce.com \
+            --set-default
+
+      # 5️⃣ Generate delta package
+      - name: Generate SFDX Git Delta
+        id: deltaChanges
+        shell: pwsh
+        run: |
+          $prevCommitId = git rev-parse HEAD^
+          Write-Host "Previous Commit ID : $prevCommitId"
+          mkdir delta
+          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
+          if (Test-Path -Path "delta/src") {
+            Get-ChildItem -Recurse delta/src
+          } else {
+            Write-Host "⚡ No delta files detected"
+          }
+
+      # 6️⃣ Validate deploy (dry run)
+      - name: 🧪 Validate Deployment
+        run: |
+          TARGET_USERNAME="${{ secrets.USER_NAME }}"
+          if [ -f delta/package/package.xml ]; then
+            echo "📦 Validating delta package..."
+            sf project deploy validate --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
+          else
+            echo "✅ No deployable changes found"
+          fi
+
+  # 🚀 Real deployment job (after merge to build/QA)
+  deploy-to-qa:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: QA
 
@@ -30,16 +95,12 @@ jobs:
 
       # 3️⃣ Install Salesforce CLI & Plugins
       - name: 🛠️ Install Salesforce CLI and Plugins
-        shell: bash
         run: |
-          echo 'Installing sf CLI'
           npm install -g @salesforce/cli@latest
-          echo 'Installing sfdx-git-delta'
           echo y | sfdx plugins:install sfdx-git-delta
 
-      # 4️⃣ Authenticate to Salesforce
-      - name: 🔐 Authenticate with Salesforce (JWT Auth)
-        shell: bash
+      # 4️⃣ Authenticate Salesforce
+      - name: 🔐 Authenticate Salesforce
         run: |
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
@@ -54,8 +115,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const branchName = `${{ github.event_name }}` === 'pull_request' ? `${{ github.event.pull_request.base.ref }}` : `${{ github.ref_name }}`;
-            console.log(`branchName : ${branchName}`)
+            const branchName = context.ref.replace('refs/heads/', '');
             const response = await github.rest.actions.listWorkflowRunsForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -63,25 +123,19 @@ jobs:
               status: 'success',
               per_page: 1
             });
-
             if (response.data.workflow_runs.length > 0) {
-              const lastSuccessfulCommitId = response.data.workflow_runs[0].head_sha;
-              console.log(`Last successful commit ID: ${lastSuccessfulCommitId}`);
-              return lastSuccessfulCommitId;
+              return response.data.workflow_runs[0].head_sha;
             } else {
-              console.log('No successful runs found, using previous commit.');
               const exec = require('child_process').execSync;
-              const previousCommitId = exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
-              console.log(`Previous commit ID: ${previousCommitId}`);
-              return previousCommitId;
+              return exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
             }
-          result-encoding: string 
+          result-encoding: string
 
       # 6️⃣ Store Last Commit ID
       - name: Store Last Commit ID
         run: echo "PREV_COMMIT_ID=${{ steps.get-commit.outputs.result }}" >> $GITHUB_ENV
 
-      # 7️⃣ Generate SFDX Git Delta
+      # 7️⃣ Generate delta package
       - name: Generate SFDX Git Delta
         id: deltaChanges
         shell: pwsh
@@ -89,12 +143,7 @@ jobs:
           $prevCommitId = "$env:PREV_COMMIT_ID"
           Write-Host "Previous Commit ID : $prevCommitId"
           mkdir delta
-          
-          # Generate delta without metadata flag
           sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
-          
-          # Show what files were detected
-          Write-Host "Files detected in delta/src:"
           if (Test-Path -Path "delta/src") {
             Get-ChildItem -Recurse delta/src
             $isChangesFound = $true
@@ -102,11 +151,10 @@ jobs:
             Write-Host "⚡ No delta files detected"
             $isChangesFound = $false
           }
-
           $isChangesFoundStr = $isChangesFound.ToString().ToLower()
           echo "isCodeChanges=$isChangesFoundStr" >> $env:GITHUB_OUTPUT
 
-      # 8️⃣ Upload Delta as Artifact (for debugging + visibility)
+      # 8️⃣ Upload Delta as Artifact
       - name: Upload Delta as Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -117,14 +165,12 @@ jobs:
             pipeline_scripts/**
             sfdx-project.json
 
-      # 8.5️⃣ Detect LWC Changes
+      # 9️⃣ Detect LWC Changes
       - name: Detect LWC Changes
         id: lwcChanges
-        shell: bash
         run: |
           echo "Checking for LWC changes..."
           git diff --name-only ${{ env.PREV_COMMIT_ID }} HEAD | grep "force-app/main/default/lwc" || true > lwc_changes.txt
-          
           if [ -s lwc_changes.txt ]; then
             echo "✅ LWC changes found"
             echo "isLwcChanges=true" >> $GITHUB_OUTPUT
@@ -133,12 +179,10 @@ jobs:
             echo "isLwcChanges=false" >> $GITHUB_OUTPUT
           fi
 
-      # 9️⃣ Deploy Changes (Delta or fallback to LWC folder)
+      # 🔟 Deploy Changes
       - name: 🚀 Deploy to Salesforce
-        shell: bash
         run: |
           TARGET_USERNAME="${{ secrets.USER_NAME }}"
-          
           if [ -f delta/package/package.xml ]; then
             echo "📦 Deploying delta package..."
             sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
@@ -147,4 +191,3 @@ jobs:
             sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
           else
             echo "✅ No deployable changes found"
-          fi
