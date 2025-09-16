@@ -110,7 +110,7 @@ jobs:
   deploy-to-qa:
     if: github.event_name == 'push'           # Only runs on push
     runs-on: ubuntu-latest
-    needs: validate-on-pr                     # Wait for validation if triggered via PR
+    # needs: validate-on-pr                     # Wait for validation if triggered via PR
     steps:
       - name: ⬇️ Checkout Code
         uses: actions/checkout@v4
