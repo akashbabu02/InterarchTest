@@ -81,7 +81,7 @@ jobs:
       - name: Store Last Commit ID
         run: echo "PREV_COMMIT_ID=${{ steps.get-commit.outputs.result }}" >> $GITHUB_ENV
 
-       # 7️⃣ Generate SFDX Git Delta (with LWC support)
+      # 7️⃣ Generate SFDX Git Delta
       - name: Generate SFDX Git Delta
         id: deltaChanges
         shell: pwsh
@@ -90,8 +90,8 @@ jobs:
           Write-Host "Previous Commit ID : $prevCommitId"
           mkdir delta
           
-          # Generate delta including LightningComponentBundle
-          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta --metadata "LightningComponentBundle"
+          # Generate delta without metadata flag
+          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
           
           # Show what files were detected
           Write-Host "Files detected in delta/src:"
@@ -117,11 +117,14 @@ jobs:
             pipeline_scripts/**
             sfdx-project.json
 
+      # 8.5️⃣ Detect LWC Changes
       - name: Detect LWC Changes
         id: lwcChanges
+        shell: bash
         run: |
           echo "Checking for LWC changes..."
           git diff --name-only ${{ env.PREV_COMMIT_ID }} HEAD | grep "force-app/main/default/lwc" || true > lwc_changes.txt
+          
           if [ -s lwc_changes.txt ]; then
             echo "✅ LWC changes found"
             echo "isLwcChanges=true" >> $GITHUB_OUTPUT
@@ -129,7 +132,6 @@ jobs:
             echo "❌ No LWC changes found"
             echo "isLwcChanges=false" >> $GITHUB_OUTPUT
           fi
-
 
       # 9️⃣ Deploy Changes (Delta or fallback to LWC folder)
       - name: 🚀 Deploy to Salesforce
@@ -146,4 +148,3 @@ jobs:
           else
             echo "✅ No deployable changes found"
           fi
-
