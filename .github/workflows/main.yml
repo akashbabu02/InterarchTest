@@ -141,7 +141,7 @@ jobs:
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ vars.USER_NAME }} \
+            --username 	minuscule@interarch.com \
             --instance-url ${{ env.URL }} \
             --set-default
 
