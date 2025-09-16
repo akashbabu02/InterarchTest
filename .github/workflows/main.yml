@@ -10,7 +10,12 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: write  
+
+env:
+  QA_USERNAME: ${{ vars.QA_USERNAME }}
+  QA_CONSUMERKEY: ${{ secrets.QA_CONSUMERKEY }}
+  URL: https://login.salesforce.com
 
 jobs:
   # -------------------------------
@@ -30,20 +35,21 @@ jobs:
         with:
           node-version: 20
 
-      - name: 🛠️ Install Salesforce CLI & Git Delta
+      - name: 🛠️ Install Salesforce CLI & Plugins
         shell: bash
         run: |
           npm install -g @salesforce/cli@latest
           echo y | sfdx plugins:install sfdx-git-delta
+          sf plugins:install @salesforce/sfdx-scanner
 
-      - name: 🔐 Authenticate to Salesforce (JWT)
+      - name: 🔐 Authenticate to QA Org (JWT)
         shell: bash
         run: |
           sf org login jwt \
-            --client-id ${{ secrets.CONSUMER_KEY }} \
+            --client-id ${{ secrets.QA_CONSUMERKEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ secrets.USER_NAME }} \
-            --instance-url https://login.salesforce.com \
+            --username ${{ vars.QA_USERNAME }} \
+            --instance-url ${{ env.URL }} \
             --set-default
 
       - name: Get Last Successful Commit ID
@@ -60,12 +66,10 @@ jobs:
               per_page: 1
             });
             if (response.data.workflow_runs.length > 0) {
-              const lastSuccessfulCommitId = response.data.workflow_runs[0].head_sha;
-              return lastSuccessfulCommitId;
+              return response.data.workflow_runs[0].head_sha;
             } else {
               const exec = require('child_process').execSync;
-              const previousCommitId = exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
-              return previousCommitId;
+              return exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
             }
           result-encoding: string
 
@@ -100,7 +104,6 @@ jobs:
     outputs:
       isCode: ${{ steps.deltaChanges.outputs.isCodeChanges }}
 
-
   # -------------------------------
   # 2️⃣ Deploy to QA after merge / push
   # -------------------------------
@@ -124,6 +127,7 @@ jobs:
         run: |
           npm install -g @salesforce/cli@latest
           echo y | sfdx plugins:install sfdx-git-delta
+          sf plugins:install @salesforce/sfdx-scanner
 
       - name: Download Delta Artifact
         uses: actions/download-artifact@v4
@@ -135,10 +139,10 @@ jobs:
         shell: bash
         run: |
           sf org login jwt \
-            --client-id ${{ secrets.CONSUMER_KEY }} \
+            --client-id ${{ secrets.QA_CONSUMERKEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ secrets.USER_NAME }} \
-            --instance-url https://login.salesforce.com \
+            --username ${{ vars.QA_USERNAME }} \
+            --instance-url ${{ env.URL }} \
             --set-default
 
       - name: Detect LWC Changes
@@ -151,10 +155,20 @@ jobs:
           else
             echo "isLwcChanges=false" >> $GITHUB_OUTPUT
 
+      - name: Salesforce Code Analyzer (Optional)
+        shell: bash
+        run: |
+          if [ -d "delta/src/classes" ]; then
+            sf scanner run --projectdir delta/ --target "**/classes/**" --category "Error Prone,Security,Best Practices,Performance,Code Style" --json > apexCodeAnalyzer.json
+          fi
+          if [ -d "delta/src/lwc" ]; then
+            sf scanner run --projectdir delta/ --target "**/lwc/**" --json > lwcCodeAnalyzer.json
+          fi
+
       - name: 🚀 Deploy Delta / LWC
         shell: bash
         run: |
-          TARGET_USERNAME="${{ secrets.USER_NAME }}"
+          TARGET_USERNAME="${{ vars.QA_USERNAME }}"
 
           if [ -f delta/package/package.xml ]; then
             echo "📦 Deploying delta package..."
