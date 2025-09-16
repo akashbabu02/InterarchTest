@@ -22,7 +22,7 @@ jobs:
   # 1️⃣ Validate PR before merge
   # -------------------------------
   validate-on-pr:
-    if: github.event_name == 'push'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout Code
