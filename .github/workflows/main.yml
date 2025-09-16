@@ -81,47 +81,53 @@ jobs:
       - name: Store Last Commit ID
         run: echo "PREV_COMMIT_ID=${{ steps.get-commit.outputs.result }}" >> $GITHUB_ENV
 
-      # 7️⃣ Generate SFDX Git Delta
+       # 7️⃣ Generate SFDX Git Delta (with LWC support)
       - name: Generate SFDX Git Delta
         id: deltaChanges
         shell: pwsh
         run: |
           $prevCommitId = "$env:PREV_COMMIT_ID"
-
           Write-Host "Previous Commit ID : $prevCommitId"
-
           mkdir delta
-          sfdx sgd:source:delta --from $prevCommitId --output delta/ --generate-delta
-
-          $isChangesFound = $false
-          $srcPath = "delta/src" 
-          if (Test-Path -Path $srcPath) { 
+          
+          # Generate delta including LightningComponentBundle
+          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta --metadata "LightningComponentBundle"
+          
+          # Show what files were detected
+          Write-Host "Files detected in delta/src:"
+          if (Test-Path -Path "delta/src") {
+            Get-ChildItem -Recurse delta/src
             $isChangesFound = $true
+          } else {
+            Write-Host "⚡ No delta files detected"
+            $isChangesFound = $false
           }
-          Write-host "Code Changes : $isChangesFound"
+
           $isChangesFoundStr = $isChangesFound.ToString().ToLower()
           echo "isCodeChanges=$isChangesFoundStr" >> $env:GITHUB_OUTPUT
-          
-      # 8️⃣ Upload Delta as Artifact
+
+      # 8️⃣ Upload Delta as Artifact (for debugging + visibility)
       - name: Upload Delta as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: salesforce-build-artifacts
           path: |
-            delta/**  
+            delta/**
             Assets/**
             pipeline_scripts/**
             sfdx-project.json
 
-      # 9️⃣ Deploy Only If Changes Exist
-      - name: 🚀 Deploy Delta Changes
-        if: ${{ steps.deltaChanges.outputs.isCodeChanges == 'true' }}
+      # 9️⃣ Deploy Changes (Delta or fallback to LWC folder)
+      - name: 🚀 Deploy to Salesforce
         shell: bash
         run: |
           TARGET_USERNAME="${{ secrets.USER_NAME }}"
+
           if [ -f delta/package/package.xml ]; then
-            echo "Deploying delta package to $TARGET_USERNAME ..."
+            echo "📦 Deploying delta package to $TARGET_USERNAME ..."
             sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
             sf project deploy report -r --json > deploymentOut.json
           else
-            echo "⚡ No deployable changes detected."
+            echo "⚡ No delta package detected, deploying full LWC as fallback..."
+            sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
+          fi
