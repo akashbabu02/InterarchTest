@@ -117,17 +117,33 @@ jobs:
             pipeline_scripts/**
             sfdx-project.json
 
+      - name: Detect LWC Changes
+        id: lwcChanges
+        run: |
+          echo "Checking for LWC changes..."
+          git diff --name-only ${{ env.PREV_COMMIT_ID }} HEAD | grep "force-app/main/default/lwc" || true > lwc_changes.txt
+          if [ -s lwc_changes.txt ]; then
+            echo "✅ LWC changes found"
+            echo "isLwcChanges=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ No LWC changes found"
+            echo "isLwcChanges=false" >> $GITHUB_OUTPUT
+          fi
+
+
       # 9️⃣ Deploy Changes (Delta or fallback to LWC folder)
       - name: 🚀 Deploy to Salesforce
         shell: bash
         run: |
           TARGET_USERNAME="${{ secrets.USER_NAME }}"
-
+          
           if [ -f delta/package/package.xml ]; then
-            echo "📦 Deploying delta package to $TARGET_USERNAME ..."
+            echo "📦 Deploying delta package..."
             sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
-            sf project deploy report -r --json > deploymentOut.json
-          else
-            echo "⚡ No delta package detected, deploying full LWC as fallback..."
+          elif [ "${{ steps.lwcChanges.outputs.isLwcChanges }}" == "true" ]; then
+            echo "⚡ Delta empty but LWC changed, deploying full LWC folder..."
             sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
+          else
+            echo "✅ No deployable changes found"
           fi
+
