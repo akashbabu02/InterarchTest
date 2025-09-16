@@ -4,6 +4,6 @@ export default class HelloWorld extends LightningElement {
     message;
 
     handleClick() {
-        this.message = 'Button clicked! pipeline delta added succesfully 4 9🎉';
+        this.message = 'Button clicked! pipeline delta added succesfully 49🎉';
     }
 }
