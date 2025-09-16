@@ -13,8 +13,8 @@ permissions:
   pull-requests: write  
 
 env:
-  QA_USERNAME: ${{ vars.QA_USERNAME }}
-  QA_CONSUMERKEY: ${{ secrets.QA_CONSUMERKEY }}
+  QA_USERNAME: ${{ vars.USER_NAME }}
+  QA_CONSUMERKEY: ${{ secrets.CONSUMER_KEY }}
   URL: https://login.salesforce.com
 
 jobs:
@@ -46,9 +46,9 @@ jobs:
         shell: bash
         run: |
           sf org login jwt \
-            --client-id ${{ secrets.QA_CONSUMERKEY }} \
+            --client-id ${{ secrets.CONSUMER_KEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ vars.QA_USERNAME }} \
+            --username ${{ vars.USER_NAME }} \
             --instance-url ${{ env.URL }} \
             --set-default
 
