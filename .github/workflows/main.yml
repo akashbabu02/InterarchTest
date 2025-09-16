@@ -129,11 +129,11 @@ jobs:
           echo y | sfdx plugins:install sfdx-git-delta
           sf plugins:install @salesforce/sfdx-scanner
 
-      - name: Download Delta Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: salesforce-build-artifacts
-          path: ${{ github.workspace }}
+      # - name: Download Delta Artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: salesforce-build-artifacts
+      #     path: ${{ github.workspace }}
 
       - name: 🔐 Authenticate to QA Org
         shell: bash
