@@ -76,11 +76,9 @@ jobs:
 
   # 🚀 Real deployment job (after merge to build/QA)
   deploy-to-qa:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    environment: QA
-
-    steps:
+      needs: validate-on-pr
+      runs-on: ubuntu-latest 
+      steps:
       # 1️⃣ Checkout code
       - name: ⬇️ Checkout code
         uses: actions/checkout@v4
