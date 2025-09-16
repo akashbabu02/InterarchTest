@@ -139,9 +139,9 @@ jobs:
         shell: bash
         run: |
           sf org login jwt \
-            --client-id ${{ secrets.QA_CONSUMERKEY }} \
+            --client-id ${{ secrets.CONSUMER_KEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ vars.QA_USERNAME }} \
+            --username ${{ vars.USER_NAME }} \
             --instance-url ${{ env.URL }} \
             --set-default
 
