@@ -76,8 +76,9 @@ jobs:
 
   # 🚀 Real deployment job (after merge to build/QA)
   deploy-to-qa:
-      needs: validate-on-pr
       runs-on: ubuntu-latest 
+      needs: validate-on-pr
+      if: github.event_name=='push'
       steps:
       # 1️⃣ Checkout code
       - name: ⬇️ Checkout code
