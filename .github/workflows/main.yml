@@ -22,7 +22,7 @@ jobs:
   # 1️⃣ Validate PR before merge
   # -------------------------------
   validate-on-pr:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: ⬇️ Checkout Code
@@ -48,7 +48,7 @@ jobs:
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
             --jwt-key-file asset/server.key \
-            --username ${{ vars.USER_NAME }} \
+            --username minuscule@interarch.com \
             --instance-url ${{ env.URL }} \
             --set-default
 
@@ -71,7 +71,7 @@ jobs:
               const exec = require('child_process').execSync;
               return exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
             }
-          result-encoding: string
+          result-encoding: string    
 
       - name: Store Last Commit ID
         run: echo "PREV_COMMIT_ID=${{ steps.get-commit.outputs.result }}" >> $GITHUB_ENV
