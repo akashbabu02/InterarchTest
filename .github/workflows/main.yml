@@ -3,7 +3,7 @@ name: Salesforce Build Pipeline - InterarchQA
 on:
   push:
     branches:
-      - build/QA
+      - master
   workflow_dispatch:
 
 permissions:
