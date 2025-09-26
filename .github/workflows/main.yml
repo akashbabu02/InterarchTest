@@ -1,11 +1,11 @@
-name: Salesforce QA Pipeline
+name: Salesforce QA Pipeline with Fortify FoD
 
 on:
   push:
     branches:
       - build/QA
   pull_request:
-    branches: 
+    branches:
       - build/QA
 
 permissions:
@@ -13,12 +13,14 @@ permissions:
 
 env:
   URL: https://login.salesforce.com
+  FOD_API: "https://api.trial.fortify.com"
 
 jobs:
   fortify-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: ⬇ Checkout Code 
+
+      - name: ⬇ Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -26,15 +28,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Salesforce CLI & Plugins
-        shell: bash
-        run: |
-          npm install -g @salesforce/cli@latest
-          echo y | sfdx plugins:install sfdx-git-delta
-          sf plugins:install @salesforce/sfdx-scanner
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
 
       - name: Authenticate to QA Org (JWT)
-        shell: bash
         run: |
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
@@ -43,10 +40,69 @@ jobs:
             --instance-url ${{ env.URL }} \
             --set-default
 
-      - name: Fortify AST Scan
-        uses: fortify/github-action@v2.1.1
+      - name: Prepare code for Fortify scan
+        run: |
+          mkdir fortify_scan
+          cp -r force-app/main/default/* fortify_scan/
+          cd fortify_scan
+          zip -r ../fortify_source.zip ./*
+          cd ..
+
+      - name: Upload & Start Fortify FoD Scan
+        env:
+          FOD_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
+          FOD_PROJECT: ${{ secrets.FORTIFY_PROJECT_NAME }}
+        run: |
+          echo "Uploading source to Fortify on Demand..."
+          UPLOAD_RESPONSE=$(curl -s -X POST "$FOD_API/api/v3/upload" \
+            -H "Authorization: Bearer $FOD_TOKEN" \
+            -F "file=@fortify_source.zip" \
+            -F "projectName=$FOD_PROJECT")
+          echo "Upload response: $UPLOAD_RESPONSE"
+
+          SCAN_ID=$(echo $UPLOAD_RESPONSE | jq -r '.scanId')
+          if [ "$SCAN_ID" == "null" ]; then
+            echo "Failed to get scan ID"
+            exit 1
+          fi
+          echo "Scan ID: $SCAN_ID"
+
+          echo "Starting scan..."
+          curl -s -X POST "$FOD_API/api/v3/scan/$SCAN_ID/start" \
+            -H "Authorization: Bearer $FOD_TOKEN"
+
+          echo "Waiting for scan to complete..."
+          STATUS="InProgress"
+          while [ "$STATUS" == "InProgress" ]; do
+            sleep 30
+            STATUS=$(curl -s "$FOD_API/api/v3/scan/$SCAN_ID/status" \
+              -H "Authorization: Bearer $FOD_TOKEN" | jq -r '.status')
+            echo "Current scan status: $STATUS"
+          done
+
+          if [ "$STATUS" != "Completed" ]; then
+            echo "Scan failed or stopped with status: $STATUS"
+            exit 1
+          fi
+
+      - name: Download Fortify scan report
+        env:
+          FOD_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
+          SCAN_ID: $SCAN_ID
+        run: |
+          echo "Downloading scan report..."
+          curl -s "$FOD_API/api/v3/scan/$SCAN_ID/report" \
+            -H "Authorization: Bearer $FOD_TOKEN" \
+            -o FortifyScanReport.fpr
+
+      - name: Upload Fortify scan report as artifact
+        uses: actions/upload-artifact@v4
         with:
-          api-token: ${{ secrets.FORTIFY_SECRET_KEY }}
-          project-name: ${{ secrets.FORTIFY_PROJECT_NAME }}
-          scan-target: "./force-app/main/default"
-          upload-results: true
+          name: FortifyScanReport
+          path: FortifyScanReport.fpr
+
+      - name: Deploy to QA Org
+        run: |
+          sf project deploy start --source-path force-app/main/default \
+            --target-org minuscule@admin.com --wait 10 --verbose
+
