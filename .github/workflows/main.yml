@@ -5,7 +5,7 @@ on:
     branches:
       - build/QA
   pull_request:
-    branches:
+    branches: 
       - build/QA
 
 permissions:
