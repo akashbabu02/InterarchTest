@@ -43,8 +43,8 @@ jobs:
             --instance-url ${{ env.URL }} \
             --set-default
 
-      - name: Run Fortify on Demand Scan
-        uses: microfocus/fortify-ast-scan@v1
+      - name: Fortify AST Scan
+        uses: fortify/github-action@v2.1.1
         with:
           api-token: ${{ secrets.FORTIFY_SECRET_KEY }}
           project-name: ${{ secrets.FORTIFY_PROJECT_NAME }}
