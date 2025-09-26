@@ -39,7 +39,7 @@ jobs:
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
             --jwt-key-file asset/server.key \
-            --username minuscule@interarch.com \
+            --username minuscule@admin.com \
             --instance-url ${{ env.URL }} \
             --set-default
 
