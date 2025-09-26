@@ -1,48 +1,55 @@
-name: Salesforce Build Pipeline - QA
+name: Salesforce QA Pipeline
 
 on:
   push:
     branches:
-      - build/QA       # Deploy happens on push to QA branch
+      - build/QA
   pull_request:
     branches:
-      - build/QA       # Validation happens on PR to QA branch
+      - build/QA
 
 permissions:
   contents: read
-  pull-requests: write  
 
 env:
-  QA_USERNAME: ${{ vars.USER_NAME }}
-  QA_CONSUMERKEY: ${{ secrets.CONSUMER_KEY }}
   URL: https://login.salesforce.com
 
 jobs:
+<<<<<<< HEAD
   # -------------------------------
   # 1️ Validate PR before merge
   # -------------------------------
   validate-on-pr:
     if: github.event_name == 'pull_request'
+=======
+  fortify-and-deploy:
+>>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
     runs-on: ubuntu-latest
     steps:
       - name: ⬇ Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
+<<<<<<< HEAD
       - name:  Setup Node.js
+=======
+      - name: Setup Node.js
+>>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 🛠️ Install Salesforce CLI & Plugins
+      - name: Install Salesforce CLI & Plugins
         shell: bash
         run: |
           npm install -g @salesforce/cli@latest
           echo y | sfdx plugins:install sfdx-git-delta
           sf plugins:install @salesforce/sfdx-scanner
 
+<<<<<<< HEAD
       - name:  Authenticate to QA Org (JWT)
+=======
+      - name: Authenticate to QA Org (JWT)
+>>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         shell: bash
         run: |
           sf org login jwt \
@@ -52,6 +59,7 @@ jobs:
             --instance-url ${{ env.URL }} \
             --set-default                            
 
+<<<<<<< HEAD
       - name: Get Last Successful Commit ID
         id: get-commit
         uses: actions/github-script@v7
@@ -123,12 +131,19 @@ jobs:
           node-version: 20
 
       - name:  Install Salesforce CLI & Plugins
+=======
+      - name: Run Fortify Scan
+>>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         shell: bash
         run: |
-          npm install -g @salesforce/cli@latest
-          echo y | sfdx plugins:install sfdx-git-delta
-          sf plugins:install @salesforce/sfdx-scanner
+          # Clean previous scans
+          sourceanalyzer -b MyProject -clean
+          # Analyze code
+          sourceanalyzer -b MyProject force-app/main/default/**
+          # Generate Fortify FPR report
+          sourceanalyzer -b MyProject -scan -f MyProject.fpr
 
+<<<<<<< HEAD
       # - name: Download Delta Artifact
       #   uses: actions/download-artifact@v4
       #   with:
@@ -136,15 +151,14 @@ jobs:
       #     path: ${{ github.workspace }}
 
       - name: Authenticate to QA Org      
+=======
+      - name: Deploy to QA Org
+>>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         shell: bash
         run: |
-          sf org login jwt \
-            --client-id ${{ secrets.CONSUMER_KEY }} \
-            --jwt-key-file asset/server.key \
-            --username 	minuscule@interarch.com \
-            --instance-url ${{ env.URL }} \
-            --set-default
+          sf project deploy start --source-path force-app/main/default --target-org minuscule@interarch.com --wait 10 --verbose
 
+<<<<<<< HEAD
       - name: Detect LWC Changes
         id: lwcChanges
         shell: bash
@@ -190,3 +204,5 @@ jobs:
           else
             echo " No deployable changes found"
             fi                                  
+=======
+>>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
