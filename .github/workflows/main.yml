@@ -36,13 +36,14 @@ jobs:
       - name: Fortify AST Scan
         uses: fortify/github-action@v2.1.1
         with:
-          fod-scan: true
+          sast-scan: true
+          debricked-sca-scan: false
         env:
           FOD_API: https://api.trial.fortify.com
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
           FOD_APPLICATION_NAME: SalesforceQA
           FOD_APPLICATION_VERSION: test
-          FOD_SCAN_TARGET: .force-app/main/default/lwc/testLwc
+          FOD_SCAN_TARGET: ./force-app/main/default/lwc
 
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
