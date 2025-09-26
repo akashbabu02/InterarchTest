@@ -22,27 +22,28 @@ jobs:
           node-version: '20'
 
       - name: Install Salesforce CLI
-        run: npm install -g @salesforce/cli
+        run: npm install -g @salesforce/cli sfdx-cli
 
       - name: Authenticate to Salesforce Org
         run: |
-          sf auth jwt --clientid ${{ secrets.CONSUMER_KEY }} \
+          sfdx auth:jwt:grant \
+            --clientid ${{ secrets.CONSUMER_KEY }} \
             --jwtkeyfile asset/server.key \
             --username minuscule@admin.com \
             --instanceurl https://login.salesforce.com \
-            --setdefaultusername
+            --setdefaultdevhubusername
 
       - name: Fortify AST Scan
         uses: fortify/github-action@v2.1.1
         with:
-          sast-scan: true                    # Enable SAST scan
-          debricked-sca-scan: false          # Disable SCA scan
-          scan-target: ./force-app/main/default # Path to Salesforce code
+          sast-scan: true
+          debricked-sca-scan: false
+          scan-target: ./force-app/main/default
           application-name: SalesforceQA
           version-name: test
-          upload-results: true               # Upload results to FoD
+          upload-results: true
         env:
-          FOD_API: https://api.trial.fortify.com   # Use your trial API URL
+          FOD_API: https://api.trial.fortify.com
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
 
       - name: Upload Fortify Scan Report
@@ -50,4 +51,3 @@ jobs:
         with:
           name: FortifyScanReport
           path: ./fortify_scan_report.fpr
-
