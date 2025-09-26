@@ -36,8 +36,7 @@ jobs:
       - name: Fortify AST Scan
         uses: fortify/github-action@v2.1.1
         with:
-          sast-scan: true
-          debricked-sca-scan: false
+          fod-scan: true
         env:
           FOD_API: https://api.trial.fortify.com
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
