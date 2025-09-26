@@ -43,17 +43,10 @@ jobs:
             --instance-url ${{ env.URL }} \
             --set-default
 
-      - name: Run Fortify Scan
-        shell: bash
-        run: |
-          # Clean previous scans
-          sourceanalyzer -b MyProject -clean
-          # Analyze code
-          sourceanalyzer -b MyProject force-app/main/default/**
-          # Generate Fortify FPR report
-          sourceanalyzer -b MyProject -scan -f MyProject.fpr
-
-      - name: Deploy to QA Org
-        shell: bash
-        run: |
-          sf project deploy start --source-path force-app/main/default --target-org minuscule@interarch.com --wait 10 --verbose
+      - name: Run Fortify on Demand Scan
+        uses: microfocus/fortify-ast-scan@v1
+        with:
+          api-token: ${{ secrets.FORTIFY_SECRET_KEY }}
+          project-name: ${{ secrets.FORTIFY_PROJECT_NAME }}
+          scan-target: "./force-app/main/default"
+          upload-results: true
