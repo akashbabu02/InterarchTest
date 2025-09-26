@@ -37,17 +37,27 @@ jobs:
         uses: fortify/github-action@v2.1.1
         with:
           sast-scan: true
-          debricked-sca-scan: false
+          debricked-sca-scan: true
         env:
-          FOD_API: https://api.trial.fortify.com
-          FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
-          FOD_APPLICATION_NAME: SalesforceQA
-          FOD_APPLICATION_VERSION: test
+          FOD_URL: https://api.trial.fortify.com
+          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
+          FOD_USER: ${{ secrets.USER_NAME }}
+          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+          FOD_RELEASE: SalesforceQA:test
           FOD_SCAN_TARGET: ./force-app/main/default/lwc
+          DO_WAIT: true
+          DO_EXPORT: true
+
+      # Confirm authentication + scan details
+      - name: Echo Scan Info
+        run: |
+          echo "Fortify Scan completed!"
+          echo "Tenant: ${{ secrets.FOD_TENANT }}"
+          echo "Release: SalesforceQA:test"
+          ls -lh
 
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
         with:
           name: FortifyScanReport
           path: ./fortify_scan_report.fpr
-
