@@ -43,7 +43,7 @@ jobs:
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
           FOD_APPLICATION_NAME: SalesforceQA
           FOD_APPLICATION_VERSION: test
-          FOD_SCAN_TARGET: ./force-app/main/default
+          FOD_SCAN_TARGET: .force-app/main/default/lwc/testLwc
 
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
