@@ -15,25 +15,13 @@ env:
   URL: https://login.salesforce.com
 
 jobs:
-<<<<<<< HEAD
-  # -------------------------------
-  # 1️ Validate PR before merge
-  # -------------------------------
-  validate-on-pr:
-    if: github.event_name == 'pull_request'
-=======
   fortify-and-deploy:
->>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
     runs-on: ubuntu-latest
     steps:
       - name: ⬇ Checkout Code
         uses: actions/checkout@v4
 
-<<<<<<< HEAD
-      - name:  Setup Node.js
-=======
       - name: Setup Node.js
->>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -45,11 +33,7 @@ jobs:
           echo y | sfdx plugins:install sfdx-git-delta
           sf plugins:install @salesforce/sfdx-scanner
 
-<<<<<<< HEAD
-      - name:  Authenticate to QA Org (JWT)
-=======
       - name: Authenticate to QA Org (JWT)
->>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         shell: bash
         run: |
           sf org login jwt \
@@ -57,83 +41,9 @@ jobs:
             --jwt-key-file asset/server.key \
             --username minuscule@interarch.com \
             --instance-url ${{ env.URL }} \
-            --set-default                            
+            --set-default
 
-<<<<<<< HEAD
-      - name: Get Last Successful Commit ID
-        id: get-commit
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const branchName = `${{ github.event.pull_request.base.ref }}`;
-            const response = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              branch: branchName,
-              status: 'success',
-              per_page: 1
-            });
-            if (response.data.workflow_runs.length > 0) {
-              return response.data.workflow_runs[0].head_sha;
-            } else {
-              const exec = require('child_process').execSync;
-              return exec('git rev-parse HEAD^', { encoding: 'utf8' }).trim();
-            }
-          result-encoding: string    
-
-      - name: Store Last Commit ID
-        run: echo "PREV_COMMIT_ID=${{ steps.get-commit.outputs.result }}" >> $GITHUB_ENV
-
-      - name: Generate SFDX Git Delta
-        id: deltaChanges
-        shell: pwsh
-        run: |
-          $prevCommitId = "$env:PREV_COMMIT_ID"
-          mkdir delta
-          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
-
-          if (Test-Path -Path "delta/src") {
-            $isChangesFound = $true
-          } else {  
-            $isChangesFound = $false
-          }
-          echo "isCodeChanges=$isChangesFound" >> $env:GITHUB_OUTPUT
-
-      - name: Upload Delta as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: salesforce-build-artifacts
-          path: |
-            delta/**
-            Assets/**
-            pipeline_scripts/**
-            sfdx-project.json
-
-    outputs:
-      isCode: ${{ steps.deltaChanges.outputs.isCodeChanges }}
-
-  # -------------------------------
-  # 2️⃣ Deploy to QA after merge / push
-  # -------------------------------
-  deploy-to-qa:
-    if: github.event_name == 'push'           # Only runs on push
-    runs-on: ubuntu-latest
-    # needs: validate-on-pr                     # Wait for validation if triggered via PR
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name:  Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name:  Install Salesforce CLI & Plugins
-=======
       - name: Run Fortify Scan
->>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         shell: bash
         run: |
           # Clean previous scans
@@ -143,66 +53,7 @@ jobs:
           # Generate Fortify FPR report
           sourceanalyzer -b MyProject -scan -f MyProject.fpr
 
-<<<<<<< HEAD
-      # - name: Download Delta Artifact
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: salesforce-build-artifacts
-      #     path: ${{ github.workspace }}
-
-      - name: Authenticate to QA Org      
-=======
       - name: Deploy to QA Org
->>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
         shell: bash
         run: |
           sf project deploy start --source-path force-app/main/default --target-org minuscule@interarch.com --wait 10 --verbose
-
-<<<<<<< HEAD
-      - name: Detect LWC Changes
-        id: lwcChanges
-        shell: bash
-        run: |
-         git diff --name-only HEAD | grep "force-app/main/default/lwc" || true > lwc_changes.txt
-         if [ -s lwc_changes.txt ]; then
-          echo "isLwcChanges=true" >> $GITHUB_OUTPUT
-         else
-          echo "isLwcChanges=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install Fortify (if needed)
-        run: |
-          # Make sure sourceanalyzer is installed & in PATH
-
-      - name: Run Fortify Scan
-        run: |
-          sourceanalyzer -b MyProject -clean
-          sourceanalyzer -b MyProject path/to/your/code/*
-          sourceanalyzer -b MyProject -scan -f MyProject.fpr
-
-
-      - name: Salesforce Code Analyzer (Optional)
-        shell: bash
-        run: |
-          if [ -d "delta/src/classes" ]; then
-            sf scanner run --projectdir delta/ --target "**/classes/**" --category "Error Prone,Security,Best Practices,Performance,Code Style" --json > apexCodeAnalyzer.json
-          fi
-          if [ -d "delta/src/lwc" ]; then
-            sf scanner run --projectdir delta/ --target "**/lwc/**" --json > lwcCodeAnalyzer.json
-          fi
-
-      - name: 🚀 Deploy Delta / LWC
-        shell: bash
-        run: |   
-          TARGET_USERNAME="${{ secrets.USER_NAME }}"
-          if [ -f delta/package/package.xml ]; then
-            echo "📦 Deploying delta package..."
-            sf project deploy start --manifest delta/package/package.xml --target-org $TARGET_USERNAME --wait 10 --verbose
-          elif [ "${{ steps.lwcChanges.outputs.isLwcChanges }}" == "true" ]; then
-            echo "⚡ Delta empty but LWC changed, deploying full LWC folder..."
-            sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
-          else
-            echo " No deployable changes found"
-            fi                                  
-=======
->>>>>>> 5d847c52f7010431a561474f667b54a295d6a540
