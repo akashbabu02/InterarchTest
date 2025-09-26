@@ -13,7 +13,7 @@ permissions:
 
 env:
   URL: https://login.salesforce.com
-  FOD_API: "https://api.trial.fortify.com"
+  FOD_API: "https://api.trial.fortify.com"  # Your trial API URL
 
 jobs:
   fortify-and-deploy:
@@ -48,31 +48,38 @@ jobs:
           zip -r ../fortify_source.zip ./*
           cd ..
 
-      - name: Upload & Start Fortify FoD Scan
+      - name: Trigger Fortify FoD Scan
         env:
           FOD_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
-          FOD_PROJECT: ${{ secrets.FORTIFY_PROJECT_NAME }}
         run: |
-          echo "Uploading source to Fortify on Demand..."
-          UPLOAD_RESPONSE=$(curl -s -X POST "$FOD_API/api/v3/upload" \
+          echo "Triggering Fortify scan..."
+          # 1️⃣ Create or use existing application version
+          APP_NAME="SalesforceQA"
+          APP_VERSION="test"
+
+          # 2️⃣ Upload source
+          UPLOAD_RESPONSE=$(curl -s -X POST "$FOD_API/api/v3/scan/upload" \
             -H "Authorization: Bearer $FOD_TOKEN" \
-            -F "file=@fortify_source.zip" \
-            -F "projectName=$FOD_PROJECT")
+            -F "applicationName=$APP_NAME" \
+            -F "versionName=$APP_VERSION" \
+            -F "file=@fortify_source.zip")
+          
           echo "Upload response: $UPLOAD_RESPONSE"
 
           SCAN_ID=$(echo $UPLOAD_RESPONSE | jq -r '.scanId')
-          if [ "$SCAN_ID" == "null" ]; then
-            echo "Failed to get scan ID"
+          if [ "$SCAN_ID" == "null" ] || [ -z "$SCAN_ID" ]; then
+            echo "Failed to get scan ID. Exiting."
             exit 1
           fi
           echo "Scan ID: $SCAN_ID"
 
-          echo "Starting scan..."
+          # 3️⃣ Start the scan
           curl -s -X POST "$FOD_API/api/v3/scan/$SCAN_ID/start" \
             -H "Authorization: Bearer $FOD_TOKEN"
 
-          echo "Waiting for scan to complete..."
+          # 4️⃣ Poll for scan completion
           STATUS="InProgress"
+          echo "Waiting for scan to complete..."
           while [ "$STATUS" == "InProgress" ]; do
             sleep 30
             STATUS=$(curl -s "$FOD_API/api/v3/scan/$SCAN_ID/status" \
@@ -88,9 +95,8 @@ jobs:
       - name: Download Fortify scan report
         env:
           FOD_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
-          SCAN_ID: $SCAN_ID
         run: |
-          echo "Downloading scan report..."
+          echo "Downloading Fortify scan report..."
           curl -s "$FOD_API/api/v3/scan/$SCAN_ID/report" \
             -H "Authorization: Bearer $FOD_TOKEN" \
             -o FortifyScanReport.fpr
