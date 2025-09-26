@@ -38,7 +38,7 @@ jobs:
         with:
           sast-scan: true
           debricked-sca-scan: false
-          scan-target: ./force-app/main/default
+          scan-target: .force-app/main/default/lwc
           application-name: SalesforceQA
           version-name: test
           upload-results: true
