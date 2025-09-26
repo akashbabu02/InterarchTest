@@ -79,4 +79,4 @@ $githeader =@{
 }
 
 $pullReqStatusUrl =  "$env:GIT_SERVER_URL$env:GITHUB_REPOSITORY/issues/$pullRequestID/comments"
-$pullReqStatusResponse = Invoke-RestMethod -Uri $pullReqStatusUrl -Headers $githeader -Method Post -Body $gitbody
+$pullReqStatusResponse = Invoke-RestMethod -Uri $pullReqStatusUrl -Headers $githeader -Method Post -Body $gitbody                                            

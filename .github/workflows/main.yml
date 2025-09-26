@@ -19,18 +19,18 @@ env:
 
 jobs:
   # -------------------------------
-  # 1️⃣ Validate PR before merge
+  # 1️ Validate PR before merge
   # -------------------------------
   validate-on-pr:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: ⬇️ Checkout Code
+      - name: ⬇ Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🧰 Setup Node.js
+      - name:  Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -42,7 +42,7 @@ jobs:
           echo y | sfdx plugins:install sfdx-git-delta
           sf plugins:install @salesforce/sfdx-scanner
 
-      - name: 🔐 Authenticate to QA Org (JWT)
+      - name:  Authenticate to QA Org (JWT)
         shell: bash
         run: |
           sf org login jwt \
@@ -50,7 +50,7 @@ jobs:
             --jwt-key-file asset/server.key \
             --username minuscule@interarch.com \
             --instance-url ${{ env.URL }} \
-            --set-default
+            --set-default                            
 
       - name: Get Last Successful Commit ID
         id: get-commit
@@ -86,7 +86,7 @@ jobs:
 
           if (Test-Path -Path "delta/src") {
             $isChangesFound = $true
-          } else {
+          } else {  
             $isChangesFound = $false
           }
           echo "isCodeChanges=$isChangesFound" >> $env:GITHUB_OUTPUT
@@ -112,17 +112,17 @@ jobs:
     runs-on: ubuntu-latest
     # needs: validate-on-pr                     # Wait for validation if triggered via PR
     steps:
-      - name: ⬇️ Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 🧰 Setup Node.js
+      - name:  Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 🛠️ Install Salesforce CLI & Plugins
+      - name:  Install Salesforce CLI & Plugins
         shell: bash
         run: |
           npm install -g @salesforce/cli@latest
@@ -135,7 +135,7 @@ jobs:
       #     name: salesforce-build-artifacts
       #     path: ${{ github.workspace }}
 
-      - name: 🔐 Authenticate to QA Org
+      - name: Authenticate to QA Org      
         shell: bash
         run: |
           sf org login jwt \
@@ -155,6 +155,16 @@ jobs:
          else
           echo "isLwcChanges=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Install Fortify (if needed)
+        run: |
+          # Make sure sourceanalyzer is installed & in PATH
+
+      - name: Run Fortify Scan
+        run: |
+          sourceanalyzer -b MyProject -clean
+          sourceanalyzer -b MyProject path/to/your/code/*
+          sourceanalyzer -b MyProject -scan -f MyProject.fpr
 
 
       - name: Salesforce Code Analyzer (Optional)
@@ -178,5 +188,5 @@ jobs:
             echo "⚡ Delta empty but LWC changed, deploying full LWC folder..."
             sf project deploy start --source-path force-app/main/default/lwc --target-org $TARGET_USERNAME --wait 10 --verbose
           else
-            echo "✅ No deployable changes found"
-            fi
+            echo " No deployable changes found"
+            fi                                  
