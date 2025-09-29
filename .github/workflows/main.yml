@@ -40,7 +40,7 @@ jobs:
       # Step 5: Install Fortify CLI (fcli)
       - name: Install Fortify CLI
         run: |
-          curl -sSL https://github.com/fortify/fcli/releases/download/v3.8.1/fcli-linux-x86_64.tar.gz | tar -xz -C /usr/local/bin
+           curl -L -o fcli.tar.gz https://github.com/fortify/fcli/releases/download/v3.8.1/fcli-linux-x86_64.tar.gz tar -xzf fcli.tar.gz -C /usr/local/bin
 
       # Step 6: Configure fcli with Fortify on Demand trial credentials
       - name: Configure Fortify CLI
