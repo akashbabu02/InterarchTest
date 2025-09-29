@@ -1,4 +1,4 @@
-name: Salesforce QA Pipeline with Fortify
+name: Salesforce QA Pipeline with Fortify CLI
 
 on:
   push:
@@ -13,18 +13,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout repository
       - name: ⬇Checkout code
         uses: actions/checkout@v4
 
-      - name:  Setup Node.js
+      # Step 2: Setup Node.js (required for sf CLI)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name:  Install Salesforce CLI
+      # Step 3: Install Salesforce CLI
+      - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli@latest
 
-      - name: Authenticate to Salesforce Org (JWT Auth with sf)
+      # Step 4: Authenticate to Salesforce Org using JWT
+      - name: Authenticate to Salesforce Org
         run: |
           sf org login jwt \
             --client-id ${{ secrets.CONSUMER_KEY }} \
@@ -33,31 +37,43 @@ jobs:
             --instance-url https://login.salesforce.com \
             --set-default
 
-      - name:  Fortify AST Scan
-        uses: fortify/github-action@v2.1.1 
-        with:
-          sast-scan: true
-          debricked-sca-scan: true
-        env:
-          FOD_URL: https://trial.fortify.com
-          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
-          FOD_USER: ${{ secrets.USER_NAME }}
-          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
-          FOD_RELEASE: SalesforceQA:test
-          FOD_SCAN_TARGET: ./force-app/main/default/lwc
-          DO_WAIT: true
-          DO_EXPORT: true
+      # Step 5: Install Fortify CLI (fcli)
+      - name: Install Fortify CLI
+        run: |
+          curl -sSL https://github.com/fortify/fcli/releases/download/v3.8.1/fcli-linux-x86_64.tar.gz | tar -xz -C /usr/local/bin
 
-      - name:  Confirm Scan Info
+      # Step 6: Configure fcli with Fortify on Demand trial credentials
+      - name: Configure Fortify CLI
+        run: |
+          fcli config set \
+            --url https://trial.fortify.com \
+            --tenant ${{ secrets.FORTIFY_TENENT }} \
+            --user ${{ secrets.USER_NAME }} \
+            --password ${{ secrets.FORTIFY_PASSWORD }}
+
+      # Step 7: Run Fortify scan
+      - name: Run Fortify Scan
+        run: |
+          fcli fod scan \
+            --application SalesforceQA \
+            --version test \
+            --source ./force-app/main/default/lwc \
+            --wait \
+            --export ./fortify_scan_report.fpr
+
+      # Step 8: Confirm Scan Info
+      - name: Confirm Scan Info
         run: |
           echo "Fortify Scan completed!"
-          echo "Tenant: ${{ secrets.FORTIFY_TENANT }}"
+          echo "Tenant: ${{ secrets.FORTIFY_TENENT }}"
           echo "Release: SalesforceQA:test"
-          ls -lh
+          ls -lh ./fortify_scan_report.fpr
 
+      # Step 9: Upload Fortify Scan Report as GitHub artifact
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
         with:
           name: FortifyScanReport
           path: ./fortify_scan_report.fpr
+
 
