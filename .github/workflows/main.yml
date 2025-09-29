@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       # Step 3: Install Salesforce CLI
       - name: Install Salesforce CLI
@@ -39,8 +39,10 @@ jobs:
 
       # Step 5: Install Fortify CLI (fcli)
       - name: Install Fortify CLI
-        run: |
-           curl -L -o fcli.tar.gz https://github.com/fortify/fcli/releases/download/v3.8.1/fcli-linux-x86_64.tar.gz tar -xzf fcli.tar.gz -C /usr/local/bin
+        run: |  
+          curl -L -o fcli.tar.gz https://github.com/fortify/fcli/releases/download/v3.8.1/fcli-linux-x86_64.tar.gz
+          tar -xzf fcli.tar.gz -C /usr/local/bin
+
 
       # Step 6: Configure fcli with Fortify on Demand trial credentials
       - name: Configure Fortify CLI
@@ -75,5 +77,3 @@ jobs:
         with:
           name: FortifyScanReport
           path: ./fortify_scan_report.fpr
-
-
