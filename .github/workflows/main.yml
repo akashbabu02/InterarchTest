@@ -13,34 +13,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: ⬇Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name:  Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Salesforce CLI
-        run: npm install -g @salesforce/cli sfdx-cli
+      - name:  Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
 
-      - name: Authenticate to Salesforce Org
+      - name: Authenticate to Salesforce Org (JWT Auth with sf)
         run: |
-          sfdx auth:jwt:grant \
-            --clientid ${{ secrets.CONSUMER_KEY }} \
-            --jwtkeyfile asset/server.key \
+          sf org login jwt \
+            --client-id ${{ secrets.CONSUMER_KEY }} \
+            --jwt-key-file asset/server.key \
             --username minuscule@admin.com \
-            --instanceurl https://login.salesforce.com \
-            --setdefaultdevhubusername
+            --instance-url https://login.salesforce.com \
+            --set-default
 
-      - name: Fortify AST Scan
+      - name:  Fortify AST Scan
         uses: fortify/github-action@v2.1.1 
         with:
           sast-scan: true
           debricked-sca-scan: true
         env:
           FOD_URL: https://trial.fortify.com
-          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }} 
+          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
           FOD_USER: ${{ secrets.USER_NAME }}
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
           FOD_RELEASE: SalesforceQA:test
@@ -48,11 +48,10 @@ jobs:
           DO_WAIT: true
           DO_EXPORT: true
 
-      # Confirm authentication + scan details
-      - name: Echo Scan Info
+      - name:  Confirm Scan Info
         run: |
           echo "Fortify Scan completed!"
-          echo "Tenant: ${{ secrets.FOD_TENANT }}"
+          echo "Tenant: ${{ secrets.FORTIFY_TENANT }}"
           echo "Release: SalesforceQA:test"
           ls -lh
 
@@ -61,3 +60,4 @@ jobs:
         with:
           name: FortifyScanReport
           path: ./fortify_scan_report.fpr
+
