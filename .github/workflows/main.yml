@@ -44,7 +44,7 @@ jobs:
           sast-scan: true
           debricked-sca-scan: true
         env:
-          FOD_URL: https://trial.fortify.com
+          FOD_URL: https://fortify.com
           FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
           FOD_USER: ${{ secrets.USER_NAME }}
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
