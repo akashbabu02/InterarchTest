@@ -42,7 +42,7 @@ jobs:
         uses: fortify/github-action@v2.1.1
         with:
           sast-scan: true
-          debricked-sca-scan: true
+          debricked-sca-scan: true 
         env:
           FOD_URL: https://fortify.com
           FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
