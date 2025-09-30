@@ -1,5 +1,8 @@
 name: Salesforce QA Pipeline with Fortify
 
+# ----------------------------------------------------------------------
+# 1. Pipeline Triggers
+# ----------------------------------------------------------------------
 on:
   push:
     branches:
@@ -7,64 +10,71 @@ on:
   pull_request:
     branches:
       - build/QA
-
+      
 jobs:
   fortify-scan:
     runs-on: ubuntu-latest
+    
+    # Define environment variables used by the Fortify action (Optional, can also use 'with' block)
+    env:
+      # Correct Fortify on Demand API Endpoint. NOTE: Check your tenant's specific URL if it differs.
+      FOD_URL: https://ams.fortify.com 
+      # Fortify Application and Release name format: ApplicationName:ReleaseName
+      FOD_RELEASE: SalesforceQA:test 
+      # Target the entire default source folder to include Apex, LWC, Aura, etc.
+      FOD_SCAN_TARGET: ./force-app/main/default 
+      # Wait for the cloud scan to complete before continuing the pipeline
+      DO_WAIT: true 
 
     steps:
       # Step 1: Checkout repository 
       - name: ⬇ Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Setup Node.js (required for Salesforce CLI)
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      # Step 3: Install Salesforce CLI
-      - name: Install Salesforce CLI
-        run: npm install -g @salesforce/cli@latest
-
-      # Step 4: Authenticate to Salesforce Org using JWT
-      - name: Authenticate to Salesforce Org
+      # Step 2 (Optional but Recommended): Build Dependencies
+      # Although Fortify's Salesforce engine is robust, ensuring all dependencies 
+      # are present in the package is generally good practice for FoD.
+      - name: Build and Prep (e.g., Salesforce CLI install, dependency fetching)
         run: |
-          sf org login jwt \
-            --client-id ${{ secrets.CONSUMER_KEY }} \
-            --jwt-key-file asset/server.key \
-            --username minuscule@admin.com \
-            --instance-url https://login.salesforce.com \
-            --set-default
+          # Install Salesforce CLI (used for dependency management if needed)
+          npm install -g @salesforce/cli@latest
+          # Example of retrieving LWC/Aura dependencies if necessary:
+          # sf project retrieve --metadata ApexClass,LightningComponentBundle --target-org <alias>
 
-      # Step 5: Run Fortify scan using official GitHub Action
-      - name: Fortify AST Scan
+      # Step 3: Run Fortify AST Scan
+      - name: 🚀 Fortify on Demand SAST Scan & Upload
         uses: fortify/github-action@v2.1.1
         with:
           sast-scan: true
+          # Enable Software Composition Analysis (SCA) for third-party library risks
           debricked-sca-scan: true 
+          # Use secrets for authentication. Use env variables defined above or set them here.
         env:
-          FOD_URL: https://fortify.com
-          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
-          FOD_USER: ${{ secrets.USER_NAME }}
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }} # Corrected variable name capitalization
+          FOD_USER: ${{ secrets.FORTIFY_USER }}     # Standardized variable name
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
-          FOD_RELEASE: SalesforceQA:test
-          FOD_SCAN_TARGET: ./force-app/main/default/lwc
-          DO_WAIT: true
-          DO_EXPORT: true
+          # FOD_URL, FOD_RELEASE, FOD_SCAN_TARGET, DO_WAIT are inherited from the job's 'env' block
 
-      # Step 6: Confirm scan info
-      - name: Confirm Scan Info
-        run: |
-          echo "Fortify Scan completed!"
-          echo "Tenant: ${{ secrets.FORTIFY_TENENT }}"
-          echo "Release: SalesforceQA:test"
-          ls -lh ./fortify_scan_report.fpr
-
-      # Step 7: Upload Fortify scan report as GitHub artifact
-      - name: Upload Fortify Scan Report
-        uses: actions/upload-artifact@v4
+      # Step 4: Generate SARIF Report (Required for GitHub Code Scanning Integration)
+      # This step contacts FoD and downloads the finished scan results as a SARIF file.
+      - name: 📥 Generate SARIF Report from FoD
+        uses: fortify/github-action/fod-generate-sarif@v2.1.1
+        if: always() # Run even if previous step had soft errors or warnings
         with:
-          name: FortifyScanReport
-          path: ./fortify_scan_report.fpr
+          sarif-file: fortify_scan_report.sarif
+        env:
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+          FOD_USER: ${{ secrets.FORTIFY_USER }}
+          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+          FOD_URL: https://ams.fortify.com # Must match the URL used in the scan step
+          FOD_RELEASE: SalesforceQA:test
+      
+      # Step 5: Upload Fortify scan report as GitHub artifact (SARIF format)
+      - name: ⬆ Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          # This connects the Fortify results to GitHub's built-in Security tab
+          sarif_file: fortify_scan_report.sarif
+
 
