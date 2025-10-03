@@ -32,8 +32,10 @@ jobs:
             --username minuscule@admin.com \
             --instanceurl https://login.salesforce.com \
             --setdefaultdevhubusername
+            
       - name: Fortify AST Scan
         uses: fortify/github-action@v2.1.1
+        id: fortify-scan # Add an ID to reference this step's outputs
         with:
           sast-scan: true
           debricked-sca-scan: false
@@ -41,6 +43,7 @@ jobs:
           application-name: SalesforceQA
           version-name: test
           upload-results: true
+          do-export: true
         env:
           FOD_API: https://api.trial.fortify.com
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
@@ -52,4 +55,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FortifyScanReport
-          path: ./fortify_scan_report.fpr
+          path: ${{ steps.fortify-scan.outputs.sast-report-path }} # Correct path from the Fortify action's output
