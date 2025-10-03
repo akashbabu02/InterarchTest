@@ -44,6 +44,9 @@ jobs:
         env:
           FOD_API: https://api.trial.fortify.com
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
+          FOD_USERNAME: ${{ secrets.FORTIFY_USERNAME }}           
+          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}           
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}   
 
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
