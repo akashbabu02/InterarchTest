@@ -51,12 +51,22 @@ jobs:
           DO_WAIT: true
           DO_EXPORT: true
 
-      - name: Upload Fortify Scan Report Artifact # This is where you add the upload step
+      - name: Find all SARIF files
+        run: find . -name "*.sarif" -exec ls -la {} +
+
+      - name: Upload Fortify Scan Report Artifact 
         uses: actions/upload-artifact@v4
         with:
-          name: fortify-sast-report # Name of the artifact
-          path: gh-fortify-sast.sarif # Path to the generated SARIF file
-          if-no-files-found: warn # Set to 'warn' or 'error' if you want it to fail if no file is found
+          name: fortify-sast-report
+          path: gh-fortify-sast.sarif 
+          if-no-files-found: error #
+
+      # - name: Upload Fortify Scan Report Artifact # This is where you add the upload step
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: fortify-sast-report # Name of the artifact
+      #     path: gh-fortify-sast.sarif # Path to the generated SARIF file
+      #     if-no-files-found: warn # Set to 'warn' or 'error' if you want it to fail if no file is found
 
       
       # - name: Fortify AST Scan
