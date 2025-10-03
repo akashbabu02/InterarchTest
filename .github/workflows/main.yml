@@ -1,91 +1,28 @@
-name: Salesforce QA Pipeline with Fortify
+name: Fortify Scan
 
 on:
   push:
     branches:
-      - build/QA
+       - build/QA
   pull_request:
-    branches:
-      - build/QA
 
 jobs:
   fortify-scan:
     runs-on: ubuntu-latest
-    
-    # Define environment variables used across the Fortify steps
-    env:
-      # Use the standard FoD API endpoint. (Change this if your tenant uses a different URL)
-      FOD_URL: https://test.fortify.com 
-      # Fortify Application and Release name format: ApplicationName:ReleaseName
-      FOD_RELEASE: SalesforceQA:test 
-      # Target the entire default source folder to include Apex, LWC, Aura, etc.
-      FOD_SCAN_TARGET: ./force-app/main/default 
-      # Wait for the cloud scan to complete before continuing the pipeline
-      DO_WAIT: true 
 
     steps:
-      # Step 1: Checkout repository (UNCHANGED per request)
-      - name: ⬇ Checkout code
+      # Step 1: Checkout your repo code
+      - name: Check out source code
         uses: actions/checkout@v4
 
-      # Step 2: Setup Node.js (UNCHANGED per request)
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # Step 2: Run Fortify on Demand SAST & SCA scan
+      - name: Run Fortify on Demand SAST & SCA Scan
+        uses: fortify/github-action@v2
         with:
-          node-version: "20"
-
-      # Step 3: Install Salesforce CLI (UNCHANGED per request)
-      - name: Install Salesforce CLI
-        run: npm install -g @salesforce/cli@latest
-
-      # Step 4: Authenticate to Salesforce Org using JWT (UNCHANGED per request)
-      - name: Authenticate to Salesforce Org
-        run: |
-          sf org login jwt \
-            --client-id ${{ secrets.CONSUMER_KEY }} \
-            --jwt-key-file asset/server.key \
-            --username minuscule@admin.com \
-            --instance-url https://login.salesforce.com \
-            --set-default
-
-      # Step 5: Run Fortify scan using official GitHub Action (FIXED)
-      - name: 🚀 Fortify AST Scan and Upload Source Code
-        # FIX: Using major version @v2 (instead of @v2.1.1) is more stable for GitHub Actions
-        uses: fortify/github-action@v2 
-        with:
-          sast-scan: true
-          debricked-sca-scan: true 
-          # The inputs below use the environment variables defined in the job's 'env' block
+          sast-scan: true              # Run SAST scan
+          debricked-sca-scan: true     # Run Debricked SCA scan
         env:
-          # FIX: Corrected URL, Scan Target, and standardized secret names
-          FOD_URL: ${{ env.FOD_URL }}
-          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }} # FIX: Corrected spelling from FORTIFY_TENENT
-          FOD_USER: ${{ secrets.FORTIFY_USER }}     # FIX: Standardized variable name (was USER_NAME)
+          FOD_URL: https://apac.fortify.com   # or EU/other region if needed
+          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
+          FOD_USER: ${{ secrets.USER_NAME }}
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
-          FOD_RELEASE: ${{ env.FOD_RELEASE }}
-          FOD_SCAN_TARGET: ${{ env.FOD_SCAN_TARGET }}
-          DO_WAIT: ${{ env.DO_WAIT }}
-          # REMOVED: DO_EXPORT: true (not needed for SARIF flow)
-
-      # Step 6: Generate SARIF Report from Fortify on Demand (NEW - Replaces Confirm Scan Info)
-      # This step downloads the finished results from the cloud as a SARIF file.
-      - name: 📥 Generate SARIF Report from FoD
-        # FIX: Using major version @v2 for the sub-action
-        uses: fortify/github-action/fod-generate-sarif@v2 
-        if: always() # Ensure this runs even if the scan step has warnings
-        with:
-          sarif-file: fortify_scan_report.sarif
-        env:
-          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
-          FOD_USER: ${{ secrets.FORTIFY_USER }}
-          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
-          FOD_URL: ${{ env.FOD_URL }}
-          FOD_RELEASE: ${{ env.FOD_RELEASE }}
-      
-      # Step 7: Upload Fortify scan report to GitHub (NEW - Replaces old Upload Artifact)
-      # This integrates the findings into GitHub's built-in "Security > Code Scanning" alerts.
-      - name: ⬆ Upload SARIF to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: fortify_scan_report.sarif
