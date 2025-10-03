@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # - name: Checkout source code
-      #   uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,18 +33,23 @@ jobs:
             --instanceurl https://login.salesforce.com \
             --setdefaultdevhubusername
 
-      - name: Check out source code
-        uses: actions/checkout@v4  
       - name: Run Fortify on Demand SAST & SCA Scan
         uses: fortify/github-action@v2
         with:
           sast-scan: true
           debricked-sca-scan: true
         env:
-          FOD_URL: https://ams.fortify.com
-          FOD_TENANT: ${{secrets.FORTIFY_TENANT}}
-          FOD_USER: ${{secrets.FORTIFY_USERNAME}
-          FOD_PASSWORD: ${{secrets.FORTIFY_PASSWORD}}
+          # Use FOD_API for the API URL
+          FOD_API: https://api.trial.fortify.com
+          # Corrected syntax for secrets
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+          FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
+          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+          FOD_APPVERSION: SalesforceQA:test 
+          FOD_SCAN_TARGET: ./force-app/main/default/classes
+          DO_WAIT: true
+          DO_EXPORT: true
+
       
       # - name: Fortify AST Scan
       #   id: fortify-scan
