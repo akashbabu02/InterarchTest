@@ -35,6 +35,7 @@ jobs:
 
       - name: Run Fortify on Demand SAST & SCA Scan
         uses: fortify/github-action@v2
+        id: fortify-sast-sca-scan
         with:
           sast-scan: true
           debricked-sca-scan: true
@@ -49,6 +50,13 @@ jobs:
           FOD_SCAN_TARGET: ./force-app/main/default/classes
           DO_WAIT: true
           DO_EXPORT: true
+
+      - name: Upload Fortify Scan Report Artifact # This is where you add the upload step
+        uses: actions/upload-artifact@v4
+        with:
+          name: fortify-sast-report # Name of the artifact
+          path: gh-fortify-sast.sarif # Path to the generated SARIF file
+          if-no-files-found: warn # Set to 'warn' or 'error' if you want it to fail if no file is found
 
       
       # - name: Fortify AST Scan
