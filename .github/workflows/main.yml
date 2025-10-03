@@ -13,53 +13,66 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
 
-      - name: Install Salesforce CLI
-        run: npm install -g @salesforce/cli sfdx-cli
+      # - name: Install Salesforce CLI
+      #   run: npm install -g @salesforce/cli sfdx-cli
 
-      - name: Authenticate to Salesforce Org
-        run: |
-          sfdx auth:jwt:grant \
-            --clientid ${{ secrets.CONSUMER_KEY }} \
-            --jwtkeyfile asset/server.key \
-            --username minuscule@admin.com \
-            --instanceurl https://login.salesforce.com \
-            --setdefaultdevhubusername
-      
-      - name: Fortify AST Scan
-        id: fortify-scan
-        # Use the base version of the action to pass configuration via environment variables
+      # - name: Authenticate to Salesforce Org
+      #   run: |
+      #     sfdx auth:jwt:grant \
+      #       --clientid ${{ secrets.CONSUMER_KEY }} \
+      #       --jwtkeyfile asset/server.key \
+      #       --username minuscule@admin.com \
+      #       --instanceurl https://login.salesforce.com \
+      #       --setdefaultdevhubusername
+
+      - name: Check out source code
+        uses: actions/checkout@v4  
+      - name: Run Fortify on Demand SAST & SCA Scan
         uses: fortify/github-action@v2
         with:
-          # Tell the action to perform a SAST scan
           sast-scan: true
+          debricked-sca-scan: true
         env:
-          FOD_API: https://api.trial.fortify.com
-          FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
-          FOD_USERNAME: ${{ secrets.FORTIFY_USERNAME }}           
-          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}           
-          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
-          # This is how you configure the application and version for FoD
-          FOD_APPVERSION: SalesforceQA:test 
-          # The file/folder to scan is passed as an environment variable
-          FOD_SCAN_TARGET:  ./force-app/main/default/classes
-          # This is the environment variable to enable SARIF output
-          FORTIFY_SARIF_ENABLE: true
-          # This is the standard output filename
-          FORTIFY_SARIF_FILE: gh-fortify-sast.sarif
+          FOD_URL: https://ams.fortify.com
+          FOD_TENANT: ${{secrets.FORTIFY_TENANT}}
+          FOD_USER: ${{secrets.FORTIFY_USERNAME}
+          FOD_PASSWORD: ${{secrets.FORTIFY_PASSWORD}}
+      
+      # - name: Fortify AST Scan
+      #   id: fortify-scan
+      #   # Use the base version of the action to pass configuration via environment variables
+      #   uses: fortify/github-action@v2
+      #   with:
+      #     # Tell the action to perform a SAST scan
+      #     sast-scan: true
+      #   env:
+      #     FOD_API: https://api.trial.fortify.com
+      #     FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
+      #     FOD_USERNAME: ${{ secrets.FORTIFY_USERNAME }}           
+      #     FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}           
+      #     FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+      #     # This is how you configure the application and version for FoD
+      #     FOD_APPVERSION: SalesforceQA:test 
+      #     # The file/folder to scan is passed as an environment variable
+      #     FOD_SCAN_TARGET:  ./force-app/main/default/classes
+      #     # This is the environment variable to enable SARIF output
+      #     FORTIFY_SARIF_ENABLE: true
+      #     # This is the standard output filename
+      #     FORTIFY_SARIF_FILE: gh-fortify-sast.sarif
           
-      - name: Upload Fortify Scan Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: fortify-sast-report
-          path: gh-fortify-sast.sarif
-          # Add this to upload the file even if the Fortify scan fails
-          if-no-files-found: warn
+      # - name: Upload Fortify Scan Report
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: fortify-sast-report
+      #     path: gh-fortify-sast.sarif
+      #     # Add this to upload the file even if the Fortify scan fails
+      #     if-no-files-found: warn
 
