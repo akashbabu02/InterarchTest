@@ -1,47 +1,55 @@
-name: Salesforce Build Pipeline - InterarchQA
+name: Salesforce QA Pipeline with Fortify
 
 on:
   push:
     branches:
-      - master
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pull-requests: write
+      - build/QA
+  pull_request:
+    branches:
+      - build/QA
 
 jobs:
-  salesforce-deploy:
+  fortify-scan:
     runs-on: ubuntu-latest
-    environment: QA
 
     steps:
-      - name: ⬇️ Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: 🧰 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
 
-      - name: 🛠️ Install Salesforce CLI and Plugins (sf + sfdx)
-        shell: bash
-        run: |
-          echo 'Installing sf CLI'
-          npm install -g @salesforce/cli@latest
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli sfdx-cli
 
-      - name: 🔐 Authenticate with Salesforce (JWT Auth)
+      - name: Authenticate to Salesforce Org
         run: |
-          sf org login jwt \
-            --client-id ${{ secrets.CONSUMER_KEY }} \
-            --jwt-key-file asset/server.key \
-            --username ${{ secrets.USER_NAME }} \
-            --instance-url https://login.salesforce.com \
-            --set-default
+          sfdx auth:jwt:grant \
+            --clientid ${{ secrets.CONSUMER_KEY }} \
+            --jwtkeyfile asset/server.key \
+            --username minuscule@admin.com \
+            --instanceurl https://login.salesforce.com \
+            --setdefaultdevhubusername
+      - name: Fortify AST Scan
+        uses: fortify/github-action@v2.1.1
+        with:
+          sast-scan: true
+          debricked-sca-scan: false
+          scan-target: ./force-app/main/default
+          application-name: SalesforceQA
+          version-name: test
+          upload-results: true
+        env:
+          FOD_API: https://api.trial.fortify.com
+          FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
+          FOD_USERNAME: ${{ secrets.FORTIFY_USERNAME }}           
+          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}           
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}   
 
-      - name: 🚀 Deploy LWC changes to Salesforce
-        run: |
-          # Deploy all changes in force-app folder
-          sf project deploy start --source-dir force-app --target-org ${{ secrets.USER_NAME }} --wait 10 --verbose
+      - name: Upload Fortify Scan Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: FortifyScanReport
+          path: ./fortify_scan_report.fpr
