@@ -32,27 +32,35 @@ jobs:
             --username minuscule@admin.com \
             --instanceurl https://login.salesforce.com \
             --setdefaultdevhubusername
-            
+      
+      - name: Prepare Fortify Scan
+        # This step uses a different action or command to prepare the scan artifact
+        # For FoD, you would typically use ScanCentral Client. This is an example.
+        run: |
+          # This is a placeholder command for demonstration purposes
+          echo "Preparing scan package for Fortify"
+          # The actual command to create the package will vary
+          # It would involve downloading and running ScanCentral Client
+      
       - name: Fortify AST Scan
-        uses: fortify/github-action@v2.1.1
-        id: fortify-scan # Add an ID to reference this step's outputs
+        uses: fortify/github-action@v2
         with:
+          # `scan-target`, `application-name`, etc. are not direct inputs
+          # The scan details are typically passed through environment variables
           sast-scan: true
-          debricked-sca-scan: false
-          scan-target: ./force-app/main/default
-          application-name: SalesforceQA
-          version-name: test
-          upload-results: true
-          do-export: true
         env:
           FOD_API: https://api.trial.fortify.com
           FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
           FOD_USERNAME: ${{ secrets.FORTIFY_USERNAME }}           
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}           
-          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}   
-
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+          FOD_APPVERSION: SalesforceQA:test # This is how to set the application and version
+          SCAN_TARGET: ./force-app/main/default # This needs a different mechanism
+          # A starter workflow often uses a file, or you use a manual package step
+          
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
         with:
-          name: FortifyScanReport
-          path: ${{ steps.fortify-scan.outputs.sast-report-path }} # Correct path from the Fortify action's output
+          name: fortify-sast-report
+          path: gh-fortify-sast.sarif
+
