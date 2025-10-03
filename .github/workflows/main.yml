@@ -33,20 +33,12 @@ jobs:
             --instanceurl https://login.salesforce.com \
             --setdefaultdevhubusername
       
-      - name: Prepare Fortify Scan
-        # This step uses a different action or command to prepare the scan artifact
-        # For FoD, you would typically use ScanCentral Client. This is an example.
-        run: |
-          # This is a placeholder command for demonstration purposes
-          echo "Preparing scan package for Fortify"
-          # The actual command to create the package will vary
-          # It would involve downloading and running ScanCentral Client
-      
       - name: Fortify AST Scan
+        id: fortify-scan
+        # Use the base version of the action to pass configuration via environment variables
         uses: fortify/github-action@v2
         with:
-          # `scan-target`, `application-name`, etc. are not direct inputs
-          # The scan details are typically passed through environment variables
+          # Tell the action to perform a SAST scan
           sast-scan: true
         env:
           FOD_API: https://api.trial.fortify.com
@@ -54,13 +46,20 @@ jobs:
           FOD_USERNAME: ${{ secrets.FORTIFY_USERNAME }}           
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}           
           FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
-          FOD_APPVERSION: SalesforceQA:test # This is how to set the application and version
-          SCAN_TARGET: ./force-app/main/default # This needs a different mechanism
-          # A starter workflow often uses a file, or you use a manual package step
+          # This is how you configure the application and version for FoD
+          FOD_APPVERSION: SalesforceQA:test 
+          # The file/folder to scan is passed as an environment variable
+          FOD_SCAN_TARGET:  ./force-app/main/default/classes
+          # This is the environment variable to enable SARIF output
+          FORTIFY_SARIF_ENABLE: true
+          # This is the standard output filename
+          FORTIFY_SARIF_FILE: gh-fortify-sast.sarif
           
       - name: Upload Fortify Scan Report
         uses: actions/upload-artifact@v4
         with:
           name: fortify-sast-report
           path: gh-fortify-sast.sarif
+          # Add this to upload the file even if the Fortify scan fails
+          if-no-files-found: warn
 
