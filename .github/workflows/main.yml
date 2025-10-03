@@ -1,28 +1,52 @@
-name: Fortify Scan
+name: Salesforce QA Pipeline with Fortify
 
 on:
   push:
     branches:
-       - build/QA
+      - build/QA
   pull_request:
+    branches:
+      - build/QA
 
 jobs:
   fortify-scan:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout your repo code
-      - name: Check out source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Run Fortify on Demand SAST & SCA scan
-      - name: Run Fortify on Demand SAST & SCA Scan
-        uses: fortify/github-action@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          sast-scan: true              # Run SAST scan
-          debricked-sca-scan: true     # Run Debricked SCA scan
+          node-version: '20'
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli sfdx-cli
+
+      - name: Authenticate to Salesforce Org
+        run: |
+          sfdx auth:jwt:grant \
+            --clientid ${{ secrets.CONSUMER_KEY }} \
+            --jwtkeyfile asset/server.key \
+            --username minuscule@admin.com \
+            --instanceurl https://login.salesforce.com \
+            --setdefaultdevhubusername
+      - name: Fortify AST Scan
+        uses: fortify/github-action@v2.1.1
+        with:
+          sast-scan: true
+          debricked-sca-scan: false
+          scan-target: ./force-app/main/default
+          application-name: SalesforceQA
+          version-name: test
+          upload-results: true
         env:
-          FOD_URL: https://apac.fortify.com   # or EU/other region if needed
-          FOD_TENANT: ${{ secrets.FORTIFY_TENENT }}
-          FOD_USER: ${{ secrets.USER_NAME }}
-          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+          FOD_API: https://api.trial.fortify.com
+          FOD_API_TOKEN: ${{ secrets.FORTIFY_SECRET_KEY }}
+
+      - name: Upload Fortify Scan Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: FortifyScanReport
+          path: ./fortify_scan_report.fpr
