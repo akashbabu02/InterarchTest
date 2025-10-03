@@ -13,25 +13,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
+      # - name: Checkout source code
+      #   uses: actions/checkout@v4
 
-      # - name: Setup Node.js
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      # - name: Install Salesforce CLI
-      #   run: npm install -g @salesforce/cli sfdx-cli
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli sfdx-cli
 
-      # - name: Authenticate to Salesforce Org
-      #   run: |
-      #     sfdx auth:jwt:grant \
-      #       --clientid ${{ secrets.CONSUMER_KEY }} \
-      #       --jwtkeyfile asset/server.key \
-      #       --username minuscule@admin.com \
-      #       --instanceurl https://login.salesforce.com \
-      #       --setdefaultdevhubusername
+      - name: Authenticate to Salesforce Org
+        run: |
+          sfdx auth:jwt:grant \
+            --clientid ${{ secrets.CONSUMER_KEY }} \
+            --jwtkeyfile asset/server.key \
+            --username minuscule@admin.com \
+            --instanceurl https://login.salesforce.com \
+            --setdefaultdevhubusername
 
       - name: Check out source code
         uses: actions/checkout@v4  
