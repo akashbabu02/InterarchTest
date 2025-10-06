@@ -34,25 +34,9 @@ jobs:
             --instanceurl https://login.salesforce.com \
             --setdefaultdevhubusername
 
-      - name: Debug Fortify Environment
-        run: |
-          echo "FOD_API: $FOD_API"
-          echo "FOD_TENANT: $FOD_TENANT"
-          echo "FOD_APPVERSION: $FOD_APPVERSION"
-          echo "FOD_SCAN_TARGET: $FOD_SCAN_TARGET"
 
-      - name: Test Fortify Login Response
-        run: |
-          RESPONSE=$(curl -s -X POST "https://api.trial.fortify.com/oauth/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=password" \
-            -d "scope=api-tenant" \
-            -d "username=${{ secrets.FORTIFY_USERNAME }}" \
-            -d "password=${{ secrets.FORTIFY_PASSWORD }}" \
-            -d "tenant=${{ secrets.FORTIFY_TENANT }}")
-          echo "$RESPONSE"
       - name: Run Fortify on Demand SAST & SCA Scan
-        uses: fortify/github-action@v2
+        # uses: fortify/github-action@v2
         id: fortify-sast-sca-scan
         with:
           sast-scan: true
@@ -69,6 +53,24 @@ jobs:
           DO_WAIT: true
           DO_EXPORT: true
 
+        run: |
+          echo "Testing FoD login..."
+          RESPONSE=$(curl -s -X POST "$FOD_API/oauth/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=password" \
+            -d "username=$FOD_USER" \
+            -d "password=$FOD_PASSWORD" \
+            -d "tenant=$FOD_TENANT")
+          echo "Response from FoD API:"
+          echo $RESPONSE
+
+          # Simple check
+          if echo "$RESPONSE" | grep -q "access_token"; then
+            echo "✅ Login successful!"
+          else
+            echo "❌ Login failed. Check credentials or trial restrictions."
+            exit 1
+          fi
     
 
       # - name: Find all SARIF files
