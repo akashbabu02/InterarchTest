@@ -14,6 +14,7 @@ jobs:
 
     steps:
       - name: Checkout source code
+      
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -33,6 +34,23 @@ jobs:
             --instanceurl https://login.salesforce.com \
             --setdefaultdevhubusername
 
+      - name: Debug Fortify Environment
+        run: |
+          echo "FOD_API: $FOD_API"
+          echo "FOD_TENANT: $FOD_TENANT"
+          echo "FOD_APPVERSION: $FOD_APPVERSION"
+          echo "FOD_SCAN_TARGET: $FOD_SCAN_TARGET"
+
+      - name: Test Fortify Login Response
+        run: |
+          RESPONSE=$(curl -s -X POST "https://api.trial.fortify.com/oauth/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=password" \
+            -d "scope=api-tenant" \
+            -d "username=${{ secrets.FORTIFY_USERNAME }}" \
+            -d "password=${{ secrets.FORTIFY_PASSWORD }}" \
+            -d "tenant=${{ secrets.FORTIFY_TENANT }}")
+          echo "$RESPONSE"
       - name: Run Fortify on Demand SAST & SCA Scan
         uses: fortify/github-action@v2
         id: fortify-sast-sca-scan
@@ -51,15 +69,17 @@ jobs:
           DO_WAIT: true
           DO_EXPORT: true
 
-      - name: Find all SARIF files
-        run: find . -name "*.sarif" -exec ls -la {} +
+    
 
-      - name: Upload Fortify Scan Report Artifact 
-        uses: actions/upload-artifact@v4
-        with:
-          name: fortify-sast-report
-          path: gh-fortify-sast.sarif 
-          if-no-files-found: error #
+      # - name: Find all SARIF files
+      #   run: find . -name "*.sarif" -exec ls -la {} +
+
+      # - name: Upload Fortify Scan Report Artifact 
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: fortify-sast-report
+      #     path: gh-fortify-sast.sarif 
+      #     if-no-files-found: error #
 
       # - name: Upload Fortify Scan Report Artifact # This is where you add the upload step
       #   uses: actions/upload-artifact@v4
