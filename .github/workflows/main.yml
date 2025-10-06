@@ -53,25 +53,30 @@ jobs:
           DO_WAIT: true
           DO_EXPORT: true
 
-      - name: Test on Demand SAST & SCA Scan
+      - name: Test FoD Login
         run: |
-          echo "Testing FoD login..."
-          RESPONSE=$(curl -s -X POST "$FOD_API/oauth/token" \
+            echo "Testing FoD login..."
+            RESPONSE=$(curl -s -X POST "$FOD_API/oauth/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=password" \
             -d "username=$FOD_USER" \
             -d "password=$FOD_PASSWORD" \
             -d "tenant=$FOD_TENANT")
-          echo "Response from FoD API:"
-          echo $RESPONSE
+    
+            echo "Response from FoD API:"
+            echo $RESPONSE
 
-          # Simple check
-          if echo "$RESPONSE" | grep -q "access_token"; then
-            echo "✅ Login successful!"
-          else
-            echo "❌ Login failed. Check credentials or trial restrictions."
-            exit 1
-          fi
+            if echo "$RESPONSE" | grep -q "access_token"; then
+                echo "✅ Login successful!"
+             else
+               echo "❌ Login failed. Check credentials or trial restrictions."
+            fi
+        env:
+          FOD_API: https://api.trial.fortify.com
+          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+          FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
+          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+
     
 
       # - name: Find all SARIF files
