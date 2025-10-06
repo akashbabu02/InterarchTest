@@ -53,6 +53,7 @@ jobs:
           DO_WAIT: true
           DO_EXPORT: true
 
+      - name: Test on Demand SAST & SCA Scan
         run: |
           echo "Testing FoD login..."
           RESPONSE=$(curl -s -X POST "$FOD_API/oauth/token" \
