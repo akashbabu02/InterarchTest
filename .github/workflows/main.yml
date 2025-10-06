@@ -36,7 +36,7 @@ jobs:
 
 
       - name: Run Fortify on Demand SAST & SCA Scan
-        # uses: fortify/github-action@v2
+        uses: fortify/github-action@v2
         id: fortify-sast-sca-scan
         with:
           sast-scan: true
