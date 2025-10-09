@@ -67,9 +67,9 @@ jobs:
             echo $RESPONSE
 
             if echo "$RESPONSE" | grep -q "access_token"; then
-                echo "✅ Login successful!"
+                echo " Login successful!"
              else
-               echo "❌ Login failed. Check credentials or trial restrictions."
+               echo " Login failed. Check credentials or trial restrictions."
             fi
         env:
           FOD_API: https://api.trial.fortify.com
@@ -77,7 +77,7 @@ jobs:
           FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
           FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
 
-    
+       
 
       # - name: Find all SARIF files
       #   run: find . -name "*.sarif" -exec ls -la {} +
