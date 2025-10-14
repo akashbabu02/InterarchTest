@@ -35,7 +35,7 @@ jobs:
           USERNAMEPROD: ${{ secrets.USERNAMEPROD }}
           URLPROD: ${{ secrets.URLPROD }}
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_PAT }}
-        if: ${{ github.actor != 'dependabot[bot]' }}
+        if: ${{ github.actor != 'dependabot[bot]' }} # To skip dependabot PRs , it accept only trigger by human 
         steps:
             - uses: actions/setup-node@v4
               with:

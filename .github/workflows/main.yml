@@ -5,19 +5,21 @@ on:
     branches:        
       - build/QA
 
-  pull_request:
-    types: [opened, synchronize]
-    branches:
-      - build/QA
-  issues:
-    branches:
-      - build/QA 
-  workflow_dispatch:
+  # pull_request:
+  #   types: [opened, synchronize]
+  #   branches:
+  #     - build/QA
+  # issues:
+  #   branches:
+  #     - build/QA 
+  # workflow_dispatch:
    
 
 jobs:
-  fortify-scaning:
+  Test-run:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout source code
@@ -32,18 +34,43 @@ jobs:
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli sfdx-cli
 
-      - name: Authenticate to Salesforce Org
+      - name: Get Commit Message
+        id: get_commit_message
         run: |
-          sfdx auth:jwt:grant \
-            --clientid ${{ secrets.CONSUMER_KEY }} \
-            --jwtkeyfile asset/server.key \
-            --username minuscule@admin.com \
-            --instanceurl https://log
-            
-            
-            
-            in.salesforce.com \
-            --setdefaultdevhubusername
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          echo "Commit Message: $COMMIT_MSG"
+
+          TEST_CLASS_TYPE=""
+
+          if [[ "$COMMIT_MSG" == *"RunSpecifiedTest"* ]]; then
+            TEST_CLASSES=$(echo "$COMMIT_MSG" | sed -n 's/RunSpecifiedTest //p' | xargs)
+            TEST_CLASS_TYPE="-l RunSpecifiedTests"
+            if [[ -n "$TEST_CLASSES" ]]; then
+              IFS=',' read -ra TEST_ARRAY <<< "$TEST_CLASSES"
+              for test in "${TEST_ARRAY[@]}"; do
+                TEST_CLASS_TYPE+=" --tests $test"
+              done
+            fi
+            TEST_CLASS_TYPE+=" --dry-run"
+
+          elif [[ "$COMMIT_MSG" == *"RunLocalTest"* ]]; then
+            TEST_CLASS_TYPE="-l RunLocalTests --dry-run"
+          else
+            TEST_CLASS_TYPE="--dry-run"
+          fi
+
+          echo "Final Test Class Type: $TEST_CLASS_TYPE"
+          echo "TEST_TYPE=$TEST_CLASS_TYPE" >> "$GITHUB_ENV"
+
+      # - name: Authenticate to Salesforce Org
+      #   run: |
+      #     sfdx auth:jwt:grant \
+      #       --clientid ${{ secrets.CONSUMER_KEY }} \
+      #       --jwtkeyfile asset/server.key \
+      #       --username minuscule@admin.com \
+      #       --instanceurl https://log       
+      #       in.salesforce.com \
+      #       --setdefaultdevhubusername
 
 
       # - name: Run Fortify on Demand SAST & SCA Scan

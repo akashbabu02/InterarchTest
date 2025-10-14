@@ -1,7 +1,7 @@
 public with sharing class test1 {
     
     // Hardcoded password (Fortify should flag this)
-    private String password = 'SuperSecret123';
+    private String password = 'SuperSecret123';         
 
     public test1() {
         // constructor
