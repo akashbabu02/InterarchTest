@@ -50,7 +50,7 @@ jobs:
               for test in "${TEST_ARRAY[@]}"; do
                 TEST_CLASS_TYPE+=" --tests $test"
               done
-            fi
+            fi 
             TEST_CLASS_TYPE+=" --dry-run"
 
           elif [[ "$COMMIT_MSG" == *"RunLocalTest"* ]]; then
