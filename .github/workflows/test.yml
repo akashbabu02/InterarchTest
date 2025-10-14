@@ -1,0 +1,480 @@
+name: Validate/Deploy Code into Salesforce ORG
+ 
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - "SIT"
+      - "UAT"
+      - "PreProd"
+      - "main"
+    # paths:
+    #   - 'src/**'
+  push:
+    branches:
+      - "SIT"
+      - "UAT"
+      - "PreProd"
+    # paths:
+    #   - 'src/**'
+ 
+jobs:
+    Run-Validation:
+        runs-on: ubuntu-latest
+        env:
+          CONSUMERKEYSIT: ${{ secrets.CONSUMERKEYSIT }}
+          USERNAMESIT: ${{ secrets.USERNAMESIT }}
+          URLSIT: ${{ secrets.URLSIT }}
+          CONSUMERKEYUAT: ${{ secrets.CONSUMERKEYUAT }}
+          USERNAMEUAT: ${{ secrets.USERNAMEUAT }}
+          URLUAT: ${{ secrets.URLUAT }}
+          CONSUMERKEYPreProd: ${{ secrets.CONSUMERKEYPreProd }}
+          USERNAMEPreProd: ${{ secrets.USERNAMEPreProd }}
+          URLPreProd: ${{ secrets.URLPreProd }}
+          CONSUMERKEYPROD: ${{ secrets.CONSUMERKEYPROD }}
+          USERNAMEPROD: ${{ secrets.USERNAMEPROD }}
+          URLPROD: ${{ secrets.URLPROD }}
+          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_PAT }}
+        if: ${{ github.actor != 'dependabot[bot]' }}
+        steps:
+            - uses: actions/setup-node@v4
+              with:
+                node-version: '20'
+ 
+            - name: 'Checkout source code'
+              uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            # Now Install Salesforce CLI
+            - name: 'Install Salesforce CLI'
+              run: |
+                  wget https://developer.salesforce.com/media/salesforce-cli/sf/channels/stable/sf-linux-x64.tar.xz
+                  mkdir -p ~/cli/sf
+                  tar xJf sf-linux-x64.tar.xz -C ~/cli/sf --strip-components 1
+                  echo "$HOME/cli/sf/bin" >> $GITHUB_PATH
+                  ~/cli/sf/bin/sfdx version
+            - name: Get PR Description
+              if: github.event_name == 'pull_request'
+              id: get_pr_description
+              run: |
+                PR_NUMBER=${{ github.event.pull_request.number }}
+                echo "PR_NUMBER: $PR_NUMBER"
+                REPO=${{ github.repository }}
+                echo "REPO: $REPO"
+                API_URL="https://api.github.com/repos/$REPO/pulls/$PR_NUMBER"
+                echo "API_URL: $API_URL"
+                DESCRIPTION=$(curl -s -H "Authorization: token $GITHUB_TOKEN" $API_URL | jq -r '.body')
+                echo "PR Description: $DESCRIPTION"
+
+                # Default Test Class Type
+                TEST_CLASS_TYPE=""
+
+                if [[ "$DESCRIPTION" == *"RunSpecifiedTest"* ]]; then
+                  TEST_CLASSES=$(echo "$DESCRIPTION" | sed -n 's/RunSpecifiedTest //p' | xargs) # Trim spaces
+                  TEST_CLASS_TYPE="-l RunSpecifiedTests"
+
+                  if [[ -n "$TEST_CLASSES" ]]; then  # Check if test classes exist
+                    IFS=',' read -ra TEST_ARRAY <<< "$TEST_CLASSES"  # Split by comma into an array
+                    for test in "${TEST_ARRAY[@]}"; do
+                      TEST_CLASS_TYPE+=" --tests $test"
+                    done
+                  fi
+
+                  TEST_CLASS_TYPE+=" --dry-run"
+
+                elif [[ "$DESCRIPTION" == *"RunLocalTest"* ]]; then
+                  TEST_CLASS_TYPE="-l RunLocalTests --dry-run"
+                else
+                  TEST_CLASS_TYPE="--dry-run"  # Explicit 'else' condition
+                fi
+
+                echo "Final Test Class Type: $TEST_CLASS_TYPE"
+                echo "TEST_TYPE=$TEST_CLASS_TYPE" >> "$GITHUB_ENV"
+
+            - name: 'Installing sfdx git delta'
+              run: |
+                  echo y | sfdx plugins:install sfdx-git-delta
+                  sfdx plugins
+            - name: Generate SFDX Git Delta
+              shell: pwsh
+              run: |
+                # Determine previous commit ID
+                $prevCommitId = ""
+                if ($env:COMMIT_ID -and $env:COMMIT_ID.Trim() -ne "") {
+                    $prevCommitId = $env:COMMIT_ID.Trim()
+                }
+                else {
+                    # Get the parent commit of HEAD
+                    $prevCommitId = git rev-parse HEAD^
+                }
+                Write-Host "Previous Commit ID : $prevCommitId"
+                Write-Host "Event name : $($env:GITHUB_EVENT_NAME)"
+
+                # Create the delta folder if it doesn't exist
+                if (-Not (Test-Path -Path "delta")) {
+                    New-Item -ItemType Directory -Path "delta" | Out-Null
+                }
+
+                # Generate delta using the Salesforce CLI plugin
+                sfdx sgd:source:delta --from $prevCommitId --output delta/ --generate-delta
+
+                # Check for destructive changes
+                $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
+                if (Test-Path $destructivePath) {
+                    $destructiveChanges = Get-Content $destructivePath
+                    $destructiveChangesCheck = $destructiveChanges | Out-String
+                    if (($destructiveChangesCheck.Contains("<members>")) -and ($destructiveChangesCheck.Contains("<types>"))) {
+                        Write-Host "Destructive Changes found"
+                        echo "isDestructive=True" >> $env:GITHUB_ENV
+                    }
+                    else {
+                        Write-Host "No Destructive Changes found"
+                        echo "isDestructive=False" >> $env:GITHUB_ENV
+                    }
+                }
+                else {
+                    Write-Host "Destructive changes file not found."
+                    echo "isDestructive=False" >> $env:GITHUB_ENV
+                }
+                
+                # Move package.xml to delta/src if needed
+                $sourcePath = "delta/package/package.xml"
+                $destinationPath = "delta/src"
+                if (Test-Path -Path $destinationPath) {
+                    Write-Host "Moving package.xml to delta/src"
+                    Move-Item -Path $sourcePath -Destination $destinationPath
+                }
+            - name: 'Authenticate to  Salesforce Org'
+              run: |
+                if [ "${{ github.event_name }}" = "pull_request" ]; then
+                  TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
+                elif [ "${{ github.event_name }}" = "push" ]; then
+                  TARGET_BRANCH="${{ github.ref_name }}"
+                else
+                  echo "Unsupported event: ${{ github.event_name }}"
+                  exit 1
+                fi
+                if [ "$TARGET_BRANCH" = "SIT" ]; then
+                    # Run script for PR raised against "SIT" branch or direct commit/merge into "SIT" branch
+                    sf org login jwt --client-id $CONSUMERKEYSIT --jwt-key-file Assets/server.key --username $USERNAMESIT --instance-url $URLSIT
+                    echo "sfusername=$USERNAMESIT" >> $GITHUB_ENV
+                elif [ "$TARGET_BRANCH" = "UAT" ]; then
+                    # Run script for PR raised against "UAT" branch or direct commit/merge into "UAT" branch
+                    sf org login jwt --client-id $CONSUMERKEYUAT --jwt-key-file Assets/server.key --username $USERNAMEUAT --instance-url $URLUAT
+                    echo "sfusername=$USERNAMEUAT" >> $GITHUB_ENV
+                elif [ "$TARGET_BRANCH" = "PreProd" ]; then
+                    # Run script for PR raised against "PreProd" branch or direct commit/merge into "PreProd" branch
+                    sf org login jwt --client-id $CONSUMERKEYPreProd --jwt-key-file Assets/server.key --username $USERNAMEPreProd --instance-url $URLPreProd
+                    echo "sfusername=$USERNAMEPreProd" >> $GITHUB_ENV
+                 elif [ "$TARGET_BRANCH" = "main" ]; then
+                    # Run script for PR raised against "ProdRelease" branch or direct commit/merge into "UAT" branch
+                    sf org login jwt --client-id $CONSUMERKEYPROD --jwt-key-file Assets/server.key --username $USERNAMEPROD --instance-url $URLPROD
+                    echo "sfusername=$USERNAMEPROD" >> $GITHUB_ENV
+                else
+                    echo "No ORG found."
+                fi
+            - name: Validation Using SFDX CLI
+              if: github.event_name == 'pull_request'
+              shell: pwsh
+              run: |
+                $SFORGUSERNAME = $env:sfusername
+                Write-Host "Validating on $SFORGUSERNAME..."
+                Write-Host "destrictive : $env:isDestructive"
+                $isDestructiveFound = $env:isDestructive
+                $TEST_TYPE = $env:TEST_TYPE
+                Write-Host "TEST_TYPE : $TEST_TYPE"
+                Write-Host "TEST_TYPE : $env:TEST_TYPE"
+                $srcFolder = "delta/src"
+                if ($isDestructiveFound -eq "True") {
+                  Write-Host "Validating Destructive changes"
+                  if (-Not (Test-Path -Path $srcFolder)) {
+                    Write-Host "Only Deletion"
+                    $sfCommand = "sf project deploy start --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml --manifest delta/package/package.xml -o $SFORGUSERNAME -w 1000 $TEST_TYPE "
+                  } else {
+                    Write-Host "Deletion and Modification"
+                    $sfCommand = "sf project deploy start --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml --manifest delta/src/package.xml -o $SFORGUSERNAME -w 1000 $TEST_TYPE"
+                  }
+                } else {
+                  if (Test-Path -Path $srcFolder) {
+                    Write-Host "Validating changes"
+                    $sfCommand = "sf project deploy start --source-dir delta/src/. -o $SFORGUSERNAME -w 1000 $TEST_TYPE"
+                  } else {
+                    Write-Host "No Code found for validation."
+                    exit 0
+                  }
+                }
+                Write-Host "Executing: $sfCommand"
+                Invoke-Expression "& $sfCommand"
+            - name:  Deployment Using SFDX CLI
+              if: github.event_name == 'push'
+              shell: pwsh
+              run: |
+                $SFORGUSERNAME = $env:sfusername
+                Write-Host "Validating on $SFORGUSERNAME..."
+                Write-Host "destrictive : $env:isDestructive"
+                $isDestructiveFound = $env:isDestructive
+                $srcFolder = "delta/src"
+                if ($isDestructiveFound -eq "True") {
+                  Write-Host "Validating Destructive changes"
+                  if (-Not (Test-Path -Path $srcFolder)) {
+                    Write-Host "Only Deletion"
+                    sf project deploy start --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml --manifest delta/package/package.xml -o $SFORGUSERNAME -w 1000
+                  } else {
+                    Write-Host "Deletion and Modification"
+                    sf project deploy start --pre-destructive-changes delta/destructiveChanges/destructiveChanges.xml --manifest delta/src/package.xml -o $SFORGUSERNAME -w 1000
+                  }
+                } else {
+                  if (Test-Path -Path $srcFolder) {
+                    Write-Host "Validating changes"
+                    sf project deploy start --source-dir delta/src/. -o $SFORGUSERNAME -w 1000
+                  } else {
+                    Write-Host "No Code found for validation."
+                  }
+                }
+            # Code Scanner Starts
+            - name: 'Salesforce PMD Scanner(Code analyzer)'
+              if: github.event_name == 'pull_request'
+              run: |
+                sf project deploy report -r --json > deploymentOut.json
+                sf plugins:install @salesforce/sfdx-scanner
+                sf scanner run --target "delta/src/classes/**" --category "Error Prone,Security,Best Practices,Performance,Code Style" --json   > apexCodeAnalyzer.json
+                sf scanner:run --target "delta/src/lwc/**" --json > lwcCodeAnalyzer.json
+                sf scanner:run --target "delta/src/aura/**" --json > auraCodeAnalyzer.json
+
+            - name: Run PowerShell Script
+              if: github.event_name == 'pull_request'
+              shell: pwsh
+              run: |
+               #pwsh -File .github/workflows/pr-comment.ps1
+               #Code Analyzer Report
+               $codeAnalyzerFiles = @("apexCodeAnalyzer.json","lwcCodeAnalyzer.json","auraCodeAnalyzer.json")
+               $sfdxCodeFilesLsit = @()
+               $addSfdxCode = @()
+               $gitJsonBody = @()
+               $sfdxCodeFilesCount = 0
+               $sfdxCodeResultCount = 0
+               $codeIteration = 0
+               $gitJsonBodyIndex = 0
+               $gitJsonBodyList = [Ordered]@{}
+               $multipleComment = $false
+               #$sfdxCodeError = 0
+               $errorProneStatus = "<br>"
+               foreach($tempFile  in $codeAnalyzerFiles)
+               {
+                   $filePath = ".\"+$tempFile 
+                   $sfdxCodeResponse = Get-Content $filePath | ConvertFrom-Json
+                   $sfdxCodeResult = $sfdxCodeResponse[0].result 
+                   $sfdxCodeResultCount += $sfdxCodeResult.Count 
+                   if(($($sfdxCodeResult.Count) -ne 0) -and !($sfdxCodeResult.Contains("No rule violations found")))
+                   {
+                       $sfdxCodeFilesLsit += $tempFile 
+                       $sfdxCodeFilesCount = $($sfdxCodeResult.Count)
+                   }
+               }
+               if($sfdxCodeFilesCount -gt 0) {
+               $addSfdxCode += @"
+               <html>
+                   <body> 
+                       <h2>Salesforce Code Analyzer Report</h2>
+                           <p><b>Warning :</b> Below are the issues found in the code. Kindly review and fix it to maintain code qaulity and refer the below mentioned <b>Error Reference Url</b> column in the table for the standard steps to be followed while coding.</p>
+                       <table>
+                           <colgroup>
+                               <col />
+                               <col />
+                               <col />
+                               <col />
+                               <col />
+                               <col />
+                           </colgroup>
+                               <tr>
+                                   <th>FileName</th>
+                                   <th>Message</th>
+                                   <th>Line</th>
+                                   <th>Category</th>
+                                   <th>RuleName</th>
+                                   <th>Error Reference Url</th>
+                               </tr>
+               "@
+               $gitTable = @"
+               <html>
+                   <body> 
+                       <table>
+                           <colgroup>
+                               <col />
+                               <col />
+                               <col />
+                               <col />
+                               <col />
+                               <col />
+                           </colgroup>
+                               <tr>
+                                   <th>FileName</th>
+                                   <th>Message</th>
+                                   <th>Line</th>
+                                   <th>Category</th>
+                                   <th>RuleName</th>
+                                   <th>Error Reference Url</th>
+                               </tr>           
+               "@
+               }
+               $categotySorted = @("Error Prone","Security","Best Practices","Performance","Code Style")
+               foreach($codeFile in $sfdxCodeFilesLsit )
+               {
+                   $filePath = ".\"+$codeFile
+                   $sfdxCodeResponse = Get-Content $filePath | ConvertFrom-Json
+                   $sfdxCodeResult = $sfdxCodeResponse[0].result
+                   $engineName = ""
+                   if($sfdxCodeResponse.status -eq 0)
+                   {
+                       foreach($sfdxCode in $sfdxCodeResult)  
+                       {
+                           $engineName = $sfdxCode.engine
+                           $sfdxFile = $sfdxCode.fileName
+                           $sfdxName = $sfdxFile.Split("/")
+                           $sfdxCodeCount = $($sfdxName.Count - 1)
+                           $sfdxCodeName = $sfdxName[$sfdxCodeCount]
+                           $codeViolations = $sfdxCode.violations
+                           if($engineName -eq "pmd") {
+                               $codeViolations = $codeViolations | Sort-Object { $categotySorted.IndexOf($_.category) }
+                           } else {
+                               $codeViolations = $codeViolations | Sort-Object category
+                           }
+                           foreach($codeViolate in $codeViolations)
+                           {
+                               # if($($codeViolate.category) -eq "Error Prone") {
+                               #     $sfdxCodeError = 1
+                               #     $errorProneStatus = "<p><b>Error :</b> Pull request failed due to <b>Error Prone</b> issue found in the code please fix it and then try merge again. </p>"
+                               # } 
+                               if($sfdxCodeName -eq "-") {
+                                   $addSfdxCode += @"
+                                   <tr>
+               "@
+                               }
+                               else
+                               {
+                                   $addSfdxCode += @"
+                                   <tr>
+                                       <td rowspan='$($codeViolations.Count)'valign='top'>$sfdxCodeName</td>
+               "@
+                               }
+                               $addSfdxCode += @"
+                               <td>$($codeViolate.message)</td>
+                               <td>$($codeViolate.line)</td>
+                               <td>$($codeViolate.category)</td>
+                               <td>$($codeViolate.ruleName)</td>
+                               <td><a href='$($codeViolate.url)'>$($codeViolate.url)</a></td>
+                           </tr>
+               "@
+                               $sfdxCodeName = "-"
+                           }
+                           $codeIteration += 1
+                           if($($addSfdxCode.Count) -gt 200)  
+                           {
+                               $addSfdxCode += @"
+                       </table>
+                   </body>
+               </html> 
+               "@
+                               $gitJsonBodyList.add($gitJsonBodyIndex,$addSfdxCode)
+                               $addSfdxCode = @()
+                               $addSfdxCode += $gitTable
+                               $multipleComment = $true
+                               $gitJsonBodyIndex += 1
+                           } elseif(($sfdxCodeResultCount -eq $codeIteration) -and $multipleComment) {
+                               $gitJsonBodyList.add($gitJsonBodyIndex,$addSfdxCode)
+                               
+                           }
+                       } 
+               
+                   } 
+               }
+               if($sfdxCodeFilesCount -gt 0) {
+               $gitJsonBody += $addSfdxCode 
+               $gitJsonBody += @"
+                       </table>
+                       $errorProneStatus
+                   </body>
+               </html>       
+               "@
+               }
+               
+               #Deployment Details
+               $output = Get-Content .\deploymentOut.json | ConvertFrom-Json
+               $copmponentSuccess = $output[0].result.details.componentSuccesses
+               $copmponentFailures = $output[0].result.details.componentFailures
+               $successCount = $copmponentSuccess.Count
+               $failureCount = $copmponentFailures.Count
+               for($i=0; $i -lt $successCount; $i++){
+                   $output[0].result.details.componentSuccesses[$i].success = "Success"
+               }
+               for($i=0; $i -lt $failureCount; $i++){
+                   $output[0].result.details.componentFailures[$i].success = "Failed"
+               }
+               $gitDepJsonBody = @()
+               $gitFailedBody = @()
+               $gitDepJsonBody += @"
+               <html>
+               <body> 
+                   <h2>Deployment Details</h2>
+               </body>
+               </html>
+               "@
+               $githeader = @" 
+               "@
+               $gitJSONResult = $output | Select-Object -expand  result
+               $gitDepJsonBody += $gitJSONResult | Select-Object  @{Name="Deployment Status";Expression={$_.status}},@{Name="Number of Components Deployed";Expression={$_.numberComponentsDeployed}},@{Name="Number of Components Failed";Expression={$_.numberComponentErrors}} | ConvertTo-Html -Head $githeader
+               $gitDepJsonBody += "<br><h2>Component Details</h2><br>"
+               if($output[0].result.status -eq "Succeeded")
+               { 
+                   $JSONResult = $output | Select-Object -expand  result |Select-Object -expand details | Select-Object -expand componentSuccesses 
+                   $JSONResult | Select-Object @{Name="Component Type";Expression={$_.componentType}}, @{Name="File";Expression={$_.fileName}}, @{Name="Full Name";Expression={$_.fullName}}, @{Name="Status";Expression={$_.success}} | Sort-Object success > .\mailResult.txt
+                   $removeXml = $JSONResult | Select-Object | Where-Object { $_.fullName -ne "package.xml" }
+                   $tempJSONResult = $removeXml
+                   $gitDepJsonBody += $tempJSONResult | Select-Object  @{Name="Component Type";Expression={$_.componentType}},@{Name="File";Expression={$_.fileName}},@{Name="Full Name";Expression={$_.fullName}},@{Name="Status";Expression={$_.success}} | Sort-Object success | ConvertTo-Html -Head $githeader
+               }
+               else 
+               {
+                   $JSONResult = $output | Select-Object -expand  result |Select-Object -expand details | Select-Object -expand componentSuccesses 
+                   $JSONResult | Select-Object @{Name="Component Type";Expression={$_.componentType}}, @{Name="File";Expression={$_.fileName}}, @{Name="Full Name";Expression={$_.fullName}}, @{Name="Status";Expression={$_.success}} | Sort-Object success > .\mailResult.txt
+                   $removeXml = $JSONResult | Select-Object | Where-Object { $_.fullName -ne "package.xml" }
+                   $tempJSONResult = $removeXml
+                   $JSONResult = $output |Select-Object -expand  result |Select-Object -expand details | Select-Object -expand componentFailures  
+                   $JSONResult | Select-Object @{Name="Component Type";Expression={$_.componentType}}, @{Name="File";Expression={$_.fileName}}, @{Name="Full Name";Expression={$_.fullName}}, @{Name="Status";Expression={$_.success}}, @{Name="Failure Reason";Expression={$_.problem}} | Sort-Object success > .\mailResult.txt
+                   $gitFailedBody += $JSONResult
+                   $gitDepJsonBody += $gitFailedBody | Select-Object  @{Name="Component Type";Expression={$_.componentType}},@{Name="File";Expression={$_.fileName}},@{Name="Full Name";Expression={$_.fullName}},@{Name="Status";Expression={$_.success}}, @{Name="Failure Reason";Expression={$_.problem}} | Sort-Object success | ConvertTo-Html -Head $githeader
+               
+               }
+               
+               $pullRequest = "${{ github.ref }}" 
+               if ($pullRequest -match '\d+(?!.*\d+)') {
+                   $pullRequestID = $matches.Values
+               } else {
+                   Write-Host "No pull request ID found in branch name."
+                   exit 1
+               }
+               $githeader = @{
+                   Authorization = "token $env:GITHUB_TOKEN"
+                   Accept = "application/vnd.github.v3+json"
+               }
+               $jsonBodyCount = $gitJsonBodyList.Count
+               Write-Host "https://api.github.com/repos/${{ github.repository }}/issues/$pullRequestID/comments"
+               if ($jsonBodyCount -eq 0) {
+                   $gitJsonBody += $gitDepJsonBody
+                   $gitbody = @{
+                       body = "$gitJsonBody"
+                   } | ConvertTo-Json -Depth 2
+                   
+                   $pullReqStatusUrl = "https://api.github.com/repos/${{ github.repository }}/issues/$pullRequestID/comments"
+                   $pullReqStatusResponse = Invoke-RestMethod -Uri $pullReqStatusUrl -Headers $githeader -Method Post -Body $gitbody
+               } else {
+                   $gitJsonBodyList.add(201, $gitDepJsonBody)
+                   Write-Host "No Of Comments Generated : $($gitJsonBodyList.Count)"
+                   foreach ($gitMulBody in $gitJsonBodyList.GetEnumerator()) {
+                       $gitbody = @{
+                           body = "$($gitMulBody.Value)"
+                       } | ConvertTo-Json -Depth 2
+                       
+                       $pullReqStatusUrl = "https://api.github.com/repos/${{ github.repository }}/issues/$pullRequestID/comments"
+                       $pullReqStatusResponse = Invoke-RestMethod -Uri $pullReqStatusUrl -Headers $githeader -Method Post -Body $gitbody
+                   }
+               }
