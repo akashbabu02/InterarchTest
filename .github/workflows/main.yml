@@ -59,7 +59,7 @@ jobs:
             TEST_CLASS_TYPE="--dry-run"
           fi
 
-          echo "Final Test Class Type: $TEST_CLASS_TYPE"
+          echo "Final Test Class Type Executed: $TEST_CLASS_TYPE"
           echo "TEST_TYPE=$TEST_CLASS_TYPE" >> "$GITHUB_ENV"
 
       # - name: Authenticate to Salesforce Org
