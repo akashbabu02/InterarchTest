@@ -175,7 +175,7 @@ jobs:
                 fi
             - name: Validation Using SFDX CLI
               if: github.event_name == 'pull_request'
-              shell: pwsh
+              shell: pwsh 
               run: |
                 $SFORGUSERNAME = $env:sfusername
                 Write-Host "Validating on $SFORGUSERNAME..."
