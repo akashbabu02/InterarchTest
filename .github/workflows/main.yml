@@ -111,7 +111,7 @@ jobs:
           }
 
           # Check for destructive changes
-          $destructivePath = "delta/des
+          $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
  
 
 
