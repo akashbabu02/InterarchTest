@@ -35,6 +35,7 @@ jobs:
         run: npm install -g @salesforce/cli sfdx-cli
 
       - name: Get Commit Message
+
         id: get_commit_message
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
@@ -59,8 +60,74 @@ jobs:
             TEST_CLASS_TYPE="--dry-run"
           fi
 
-          echo "Final Test Class Type Executed: $TEST_CLASS_TYPE"
+          echo "Final Test Class Tpe Executed: $TEST_CLASS_TYPE"
           echo "TEST_TYPE=$TEST_CLASS_TYPE" >> "$GITHUB_ENV"
+
+
+      - name: Generate SFDX Git Delta
+        shell: pwsh
+        run: |
+          Write-Host " Starting Delta Generation..."
+          $prevCommitId = git rev-parse HEAD^
+          Write-Host "Previous Commit ID: $prevCommitId"
+
+          # Create delta folder if not exists
+          if (-Not (Test-Path -Path "delta")) {
+              New-Item -ItemType Directory -Path "delta" | Out-Null
+              Write-Host " Created delta directory."
+          }
+
+          # Install and run plugin
+          Write-Host " Installing sfdx-git-delta..."
+          echo y | sfdx plugins:install sfdx-git-delta
+          Write-Host " Generating delta between commits..."
+          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
+
+          # Check if delta contains any metadata changes
+          if (Get-ChildItem -Path "delta" -Recurse | Where-Object { $_.Extension -in ".cls", ".xml", ".cmp", ".js" }) {
+              Write-Host "🟢 Changes Found: Yes"
+              echo "changesFound=Yes" >> $env:GITHUB_ENV
+          }
+          else {
+              Write-Host "🔴 Changes Found: No"
+              echo "changesFound=No" >> $env:GITHUB_ENV
+          }
+
+          # Check for destructive changes
+          $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
+          if (Test-Path $destructivePath) {
+              $destructiveChanges = Get-Content $destructivePath
+              if (($destructiveChanges -match "<members>") -and ($destructiveChanges -match "<types>")) {
+                  Write-Host "💣 Destructive Changes Found: Yes"
+                  echo "isDestructive=True" >> $env:GITHUB_ENV
+              }
+              else {
+                  Write-Host "✅ Destructive Changes Found: No"
+                  echo "isDestructive=False" >> $env:GITHUB_ENV
+              }
+          }
+          else {
+              Write-Host "✅ No Destructive Changes File Found."
+              echo "isDestructive=False" >> $env:GITHUB_ENV
+          }
+
+          # Move package.xml
+          $sourcePath = "delta/package/package.xml"
+          $destinationPath = "delta/src"
+          if (Test-Path -Path $sourcePath) {
+              if (-Not (Test-Path -Path $destinationPath)) {
+                  New-Item -ItemType Directory -Path $destinationPath | Out-Null
+              }
+              Move-Item -Path $sourcePath -Destination $destinationPath -Force
+              Write-Host "📦 package.xml moved to delta/src"
+          }
+
+          Write-Host "✅ Delta generation completed successfully!"
+
+
+
+
+        
 
       # - name: Authenticate to Salesforce Org
       #   run: |
