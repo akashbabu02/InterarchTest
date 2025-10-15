@@ -84,7 +84,7 @@ jobs:
           sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
 
           # Check if delta contains any metadata changes
-          if (Get-ChildItem -Path "delta" -Recurse | Where-Object { $_.Extension -in ".cls", ".xml", ".cmp", ".js" }) {
+          if (Get-ChildItem -Path "delta" -Recurse | Where-Object { -not $_.PSIsContainer }) {
               Write-Host "🟢 Changes Found: Yes"
               echo "changesFound=Yes" >> $env:GITHUB_ENV
           }

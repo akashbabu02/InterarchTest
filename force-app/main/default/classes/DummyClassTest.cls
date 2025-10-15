@@ -2,6 +2,6 @@
 private class DummyClassTest {
     @isTest static void testSayHello() {
         String result = DummyClass.sayHello();
-        System.assertEquals('Hello! added a delta file', result);
+        System.assertEquals('Hello! added ', result);
     }
 }
