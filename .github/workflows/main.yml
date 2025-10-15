@@ -34,8 +34,8 @@ jobs:
         with:
           node-version: '20'
  
-      # - name: Install Salesforce CLI
-      #   run: npm install -g @salesforce/cli sfdx-cli
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli sfdx-cli
 
       - name: Get Commit Message
 
