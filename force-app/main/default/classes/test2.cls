@@ -4,7 +4,7 @@ public with sharing class test2 {
     private String password = 'SuperSecret123';         
 
     public test1() {
-        // constructor
+        // constructor 
     }
 
     // Example: Vulnerable SOQL (SOQL Injection)
