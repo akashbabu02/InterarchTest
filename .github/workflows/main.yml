@@ -1,7 +1,7 @@
 name: Salesforce QA Pipeline with Fortify
 
 on:
-  push:
+  push: 
     branches:        
       - build/QA
 
