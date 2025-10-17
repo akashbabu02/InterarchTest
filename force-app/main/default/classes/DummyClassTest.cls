@@ -8,3 +8,4 @@ private class DummyClassTest {
            System.assertEquals('Hello! added ', result);
     }
 }
+ 
