@@ -5,16 +5,6 @@ on:
     branches:        
       - build/QA
 
-  # pull_request:
-  #   types: [opened, synchronize]
-  #   branches:
-  #     - build/QA
-  # issues:
-  #   branches:
-  #     - build/QA  
-  # workflow_dispatch:
-   
-
 jobs:
   Test-run:
     runs-on: ubuntu-latest
@@ -23,22 +13,19 @@ jobs:
 
     steps:
       - name: Checkout source code
-      
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
- 
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
- 
+
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli sfdx-cli
 
       - name: Get Commit Message
-
         id: get_commit_message
         run: |
           COMMIT_MSG="${{ github.event.head_commit.message }}"
@@ -63,12 +50,9 @@ jobs:
             TEST_CLASS_TYPE="--dry-run"
           fi
 
-          echo "Final Test Class Tpe Executed: $TEST_CLASS_TYPE"
+          echo "Final Test Class Type Executed: $TEST_CLASS_TYPE"
           echo "TEST_TYPE=$TEST_CLASS_TYPE" >> "$GITHUB_ENV"
 
-
-          
-          
       - name: Generate SFDX Git Delta
         shell: pwsh
         env:
@@ -106,13 +90,138 @@ jobs:
               echo "changesFound=Yes" >> $env:GITHUB_ENV
           }
           else {
-              Write-Host "🔴 Changes Found: No"
+              Write-Host "🔴 Changes Found: No"          
               echo "changesFound=No" >> $env:GITHUB_ENV
           }
 
           # Check for destructive changes
           $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
- 
+
+      - name: Upload delta artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: delta-folder
+          path: delta/
+
+      - name: Generate HTML Delta Report
+        shell: pwsh
+        run: |
+          Write-Host "🔹 Generating HTML report..."
+
+          # Variables
+          $reportPath = "delta/DeltaReport.html"
+          $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
+          $destructiveFound = Test-Path $destructivePath
+
+          # Create base HTML
+          $htmlContent = @"
+          <html>
+            <head>
+              <style>
+                body { font-family: Arial; padding: 10px; }
+                table { border-collapse: collapse; width: 100%; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #0070d2; color: white; }
+                tr:nth-child(even) { background-color: #f2f2f2; }
+              </style>
+            </head>
+            <body>
+              <h2>🔹 Salesforce Delta Generation Report</h2>
+              <table>
+                <tr>
+                  <th>Step</th>
+                  <th>Status</th>
+                  <th>Details</th>
+                </tr>
+          "@
+
+          # Add rows dynamically
+          $htmlContent += "            <tr><td>Previous Commit ID</td><td>✅ Success</td><td>$prevCommitId</td></tr>`n"
+
+          if (Test-Path "delta") {
+              $htmlContent += "            <tr><td>Delta Folder</td><td>✅ Created</td><td>delta/</td></tr>`n"
+          }
+          else {
+              $htmlContent += "            <tr><td>Delta Folder</td><td>❌ Missing</td><td>Not created</td></tr>`n"
+          }
+
+          if ($env:changesFound -eq "Yes") {
+              $htmlContent += "            <tr><td>Changes Found</td><td>🟢 Yes</td><td>Files changed between commits</td></tr>`n"
+          }
+          else {
+              $htmlContent += "            <tr><td>Changes Found</td><td>🔴 No</td><td>No modified files detected</td></tr>`n"
+          }
+
+          if ($destructiveFound) {
+              $htmlContent += "            <tr><td>Destructive File</td><td>⚠️ Found</td><td>$destructivePath</td></tr>`n"
+          }
+          else {
+              $htmlContent += "            <tr><td>Destructive File</td><td>✅ None</td><td>No destructive changes</td></tr>`n"
+          }
+
+          # Close HTML
+          $htmlContent += @"
+              </table>
+              <p>Generated at: $(Get-Date)</p>
+            </body>
+          </html>
+          "@
+
+          # Save report
+          $htmlContent | Out-File -FilePath $reportPath -Encoding utf8
+          Write-Host "✅ HTML report created: $reportPath"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          
+
+       
 
 
 
