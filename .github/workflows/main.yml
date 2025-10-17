@@ -138,7 +138,7 @@ jobs:
           # Add rows dynamically
           $htmlContent += "            <tr><td>Previous Commit ID</td><td>✅ Success</td><td>$prevCommitId</td></tr>`n"
 
-          if (Test-Path "delta") {
+          if (Test-Path "delta") { 
               $htmlContent += "            <tr><td>Delta Folder</td><td>✅ Created</td><td>delta/</td></tr>`n"
           }
           else {
