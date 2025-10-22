@@ -204,10 +204,10 @@ jobs:
         with:  
           server_address:   ${{ secrets.SMTP_SERVER }} 
           server_port:  465
-          username:  ${{ secrets.SMTP_USER  }}
-          password:  ${{ secrets.SMTP_PASS  }}
+          username:  ${{ secrets.SMTP_USER }}
+          password:  ${{ secrets.SMTP_PASS }}
           subject:  Salesforce Delta Report
-          body : 
+          body : |
                Hello Team,
 
                 A new push was made to the repository.
@@ -217,7 +217,7 @@ jobs:
                 Regards,
                 DevOps Bot
 
-          to: "akashbharathi2222gmail.com"
+          to: "akashbharathi2222@gmail.com"
           from:  ${{ secrets.SMTP_USER  }}
           secure: true 
 
