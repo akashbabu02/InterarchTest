@@ -172,7 +172,32 @@ jobs:
           Write-Host "✅ HTML report created: $reportPath"
 
 
+      - name: Create custom HTML artifact (Bash)
+        shell: bash
+        run: |
+          echo "Creating custom HTML artifact..."
+          mkdir -p artifacts
+          
+          cat <<EOL > artifacts/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Custom Artifact</title>
+          </head>
+          <body>
+            <h1>Hello from Bash!</h1>
+            <p>This artifact was created in Bash job.</p>
+          </body>
+          </html>
+          EOL
 
+          echo "HTML artifact created at artifacts/index.html"
+
+      - name: Upload custom artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bash-artifacts
+          path: artifacts/
 
 
 
