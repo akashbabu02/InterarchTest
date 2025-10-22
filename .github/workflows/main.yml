@@ -212,7 +212,6 @@ jobs:
 
                 A new push was made to the repository.
                 Artifacts and reports have been generated.
-                You can download them here ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
                 Regards,
                 DevOps Bot
