@@ -199,6 +199,30 @@ jobs:
           name: bash-artifacts
           path: artifacts/
 
+      - name:  send an email to user
+        uses:  dawidd6/action-send-mail@v3
+        with:  
+          server_address:   ${{ secrets.SMTP_SERVER }} 
+          server_port:  465
+          username:  ${{ secrets.SMTP_USER  }}
+          password:  ${{ secrets.SMTP_PASS  }}
+          subject:  Salesforce Delta Report
+          body : 
+               Hello Team,
+
+                A new push was made to the repository.
+                Artifacts and reports have been generated.
+                You can download them here ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+                Regards,
+                DevOps Bot
+
+          to: "akashbharathi2222gmail.com"
+          from:  ${{ secrets.SMTP_USER  }}
+          secure: true 
+
+
+
 
 
 
