@@ -189,7 +189,7 @@ jobs:
             <p>This artifact was created in Bash job.</p>
           </body>
           </html>
-          EOL
+          EOL 
 
           echo "HTML artifact created at artifacts/index.html"
 
