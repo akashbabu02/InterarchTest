@@ -1,8 +1,8 @@
 #!/bin/bash
 echo "Sending email using Bash..."
 
-TO="akashbharathi2222@gmail.com"
-FROM="${SMTP_USER}"
+TO="akashbharathi18@gmail.com"
+FROM="akashbharathi2222@gmail.com"
 SUBJECT="Deployment Notification"
 BODY="Hello Team,
 
