@@ -2,7 +2,7 @@
 echo "Sending email using Bash..."
 
 TO="akashbharathi18@gmail.com"
-FROM="akashbharathi2222@gmail.com"
+FROM="akashbharathi2222@gmail.com" 
 SUBJECT="Deployment Notification"
 BODY="Hello Team,
 
