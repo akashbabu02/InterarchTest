@@ -1,10 +1,10 @@
-public with sharing class test1 {
+public with sharing class test2 {
     
     // Hardcoded password (Fortify should flag this)
     private String password = 'SuperSecret123';         
 
     public test1() {
-        // constructor
+        // constructor 
     }
 
     // Example: Vulnerable SOQL (SOQL Injection)

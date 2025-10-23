@@ -2,80 +2,324 @@ name: Salesforce QA Pipeline with Fortify
 
 on:
   push:
-    branches: 
-      - build/QA 
-  pull_request:
-    branches:
+    branches:        
       - build/QA
 
 jobs:
-  fortify-scan:
+  Test-run:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout source code
-      
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
- 
+
       - name: Install Salesforce CLI
         run: npm install -g @salesforce/cli sfdx-cli
 
-      - name: Authenticate to Salesforce Org
+      - name: Get Commit Message
+        id: get_commit_message
         run: |
-          sfdx auth:jwt:grant \
-            --clientid ${{ secrets.CONSUMER_KEY }} \
-            --jwtkeyfile asset/server.key \
-            --username minuscule@admin.com \
-            --instanceurl https://login.salesforce.com \
-            --setdefaultdevhubusername
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          echo "Commit Message: $COMMIT_MSG"
 
+          TEST_CLASS_TYPE=""
 
-      - name: Run Fortify on Demand SAST & SCA Scan
-        uses: fortify/github-action@v2
-        id: fortify-sast-sca-scan
+          if [[ "$COMMIT_MSG" == *"RunSpecifiedTest"* ]]; then
+            TEST_CLASSES=$(echo "$COMMIT_MSG" | sed -n 's/RunSpecifiedTest //p' | xargs)
+            TEST_CLASS_TYPE="-l RunSpecifiedTests"
+            if [[ -n "$TEST_CLASSES" ]]; then
+              IFS=',' read -ra TEST_ARRAY <<< "$TEST_CLASSES"
+              for test in "${TEST_ARRAY[@]}"; do
+                TEST_CLASS_TYPE+=" --tests $test"
+              done
+            fi 
+            TEST_CLASS_TYPE+=" --dry-run"
+
+          elif [[ "$COMMIT_MSG" == *"RunLocalTest"* ]]; then
+            TEST_CLASS_TYPE="-l RunLocalTests --dry-run"
+          else
+            TEST_CLASS_TYPE="--dry-run"
+          fi
+
+          echo "Final Test Class Type Executed: $TEST_CLASS_TYPE"
+          echo "TEST_TYPE=$TEST_CLASS_TYPE" >> "$GITHUB_ENV"
+
+      - name: Generate SFDX Git Delta
+        shell: pwsh
+        env:
+          COMMIT_ID: ${{ github.event.before }}
+        run: |
+          Write-Host "🔹 Starting Delta Generation..."
+
+          # Determine previous commit ID
+          $prevCommitId = ""
+          if ($env:COMMIT_ID -and $env:COMMIT_ID.Trim() -ne "") {
+              $prevCommitId = $env:COMMIT_ID.Trim()
+          }
+          else {
+              $prevCommitId = git rev-parse HEAD^
+          }
+          Write-Host "Previous Commit ID: $prevCommitId"
+
+          # Ensure delta folder exists
+          if (-Not (Test-Path -Path "delta")) {
+              New-Item -ItemType Directory -Path "delta" | Out-Null
+              Write-Host "Created delta directory."
+          }
+
+          # Install sfdx-git-delta plugin
+          Write-Host "Installing sfdx-git-delta..." 
+          echo y | sfdx plugins:install sfdx-git-delta
+
+          # Generate delta
+          Write-Host "Generating delta between $prevCommitId and HEAD..."
+          sfdx sgd:source:delta --from $prevCommitId --to HEAD --output delta/ --generate-delta
+
+          # Check if any changes exist
+          if (Get-ChildItem -Path "delta" -Recurse | Where-Object { -not $_.PSIsContainer }) {
+              Write-Host "🟢 Changes Found: Yes"
+              echo "changesFound=Yes" >> $env:GITHUB_ENV
+          }
+          else {
+              Write-Host "🔴 Changes Found: No"          
+              echo "changesFound=No" >> $env:GITHUB_ENV
+          }
+
+          # Check for destructive changes
+          $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
+
+      - name: Upload delta artifact
+        uses: actions/upload-artifact@v4
         with:
-          sast-scan: true
-          debricked-sca-scan: true
-        env:
-          # Use FOD_API for the API URL
-          FOD_API: https://api.trial.fortify.com
-          # Corrected syntax for secrets
-          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
-          FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
-          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
-          FOD_APPVERSION: SalesforceQA:test 
-          FOD_SCAN_TARGET: ./force-app/main/default/classes
-          DO_WAIT: true
-          DO_EXPORT: true
+          name: delta-folder
+          path: delta/
 
-      - name: Test FoD Login
+      - name: Generate HTML Delta Report
+        shell: pwsh
         run: |
-            echo "Testing FoD login..."
-            RESPONSE=$(curl -s -X POST "$FOD_API/oauth/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=password" \
-            -d "username=$FOD_USER" \
-            -d "password=$FOD_PASSWORD" \
-            -d "tenant=$FOD_TENANT")
-    
-            echo "Response from FoD API:"
-            echo $RESPONSE
+          Write-Host "🔹 Generating HTML report..."
 
-            if echo "$RESPONSE" | grep -q "access_token"; then
-                echo " Login successful!"
-             else
-               echo " Login failed. Check credentials or trial restrictions."
-            fi
+          # Variables
+          $reportPath = "delta/DeltaReport.html"
+          $destructivePath = "delta/destructiveChanges/destructiveChanges.xml"
+          $destructiveFound = Test-Path $destructivePath
+
+          # Create base HTML
+          $htmlContent = @"
+          <html>
+            <head>
+              <style>
+                body { font-family: Arial; padding: 10px; }
+                table { border-collapse: collapse; width: 100%; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #0070d2; color: white; }
+                tr:nth-child(even) { background-color: #f2f2f2; }
+              </style>
+            </head>
+            <body>
+              <h2>🔹 Salesforce Delta Generation Report</h2>
+              <table>
+                <tr>
+                  <th>Step</th>
+                  <th>Status</th>
+                  <th>Details</th>
+                </tr>
+          "@
+
+          # Add rows dynamically
+          $htmlContent += "            <tr><td>Previous Commit ID</td><td>✅ Success</td><td>$prevCommitId</td></tr>`n"
+
+          if (Test-Path "delta") { 
+              $htmlContent += "            <tr><td>Delta Folder</td><td>✅ Created</td><td>delta/</td></tr>`n"
+          }
+          else {
+              $htmlContent += "            <tr><td>Delta Folder</td><td>❌ Missing</td><td>Not created</td></tr>`n"
+          }
+
+          if ($env:changesFound -eq "Yes") {
+              $htmlContent += "            <tr><td>Changes Found</td><td>🟢 Yes</td><td>Files changed between commits</td></tr>`n"
+          }
+          else {
+              $htmlContent += "            <tr><td>Changes Found</td><td>🔴 No</td><td>No modified files detected</td></tr>`n"
+          }
+
+          if ($destructiveFound) {
+              $htmlContent += "            <tr><td>Destructive File</td><td>⚠️ Found</td><td>$destructivePath</td></tr>`n"
+          }
+          else {
+              $htmlContent += "            <tr><td>Destructive File</td><td>✅ None</td><td>No destructive changes</td></tr>`n"
+          }
+
+          # Close HTML
+          $htmlContent += @"
+              </table>
+              <p>Generated at: $(Get-Date)</p>
+            </body>
+          </html>
+          "@
+
+          # Save report
+          $htmlContent | Out-File -FilePath $reportPath -Encoding utf8
+          Write-Host "✅ HTML report created: $reportPath"
+
+
+      - name: Create custom HTML artifact (Bash)
+        shell: bash
+        run: |
+          echo "Creating custom HTML artifact..."
+          mkdir -p artifacts
+          
+          cat <<EOL > artifacts/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Custom Artifact</title>
+          </head>
+          <body>
+            <h1>Hello from Bash!</h1>
+            <p>This artifact was created in Bash job.</p>
+          </body>
+          </html>
+          EOL 
+
+          echo "HTML artifact created at artifacts/index.html"
+
+      - name: Upload custom artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bash-artifacts
+          path: artifacts/
+
+      - name: Send email notification
+        env: 
+         SMTP_USER: ${{ secrets.SMTP_USER }}
+         SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        shell: bash
+        run:
+             bash ./pipeline_scripts/email.sh
+
+      - name: Get GitHub API Response
+        shell: pwsh
         env:
-          FOD_API: https://api.trial.fortify.com
-          FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
-          FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
-          FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           GIT_SERVER_URL: "https://api.github.com/repos/"
+        run: ./pipeline_scripts/getRepoInfo.ps1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+          
+
+       
+
+
+
+
+        
+
+      # - name: Authenticate to Salesforce Org
+      #   run: |
+      #     sfdx auth:jwt:grant \
+      #       --clientid ${{ secrets.CONSUMER_KEY }} \
+      #       --jwtkeyfile asset/server.key \
+      #       --username minuscule@admin.com \
+      #       --instanceurl https://log       
+      #       in.salesforce.com \
+      #       --setdefaultdevhubusername
+
+
+      # - name: Run Fortify on Demand SAST & SCA Scan
+      #   uses: fortify/github-action@v2
+      #   id: fortify-sast-sca-scan
+      #   with:
+      #     sast-scan: true
+      #     debricked-sca-scan: true
+      #   env:
+      #     # Use FOD_API for the API URL
+      #     FOD_API: https://api.trial.fortify.com
+      #     # Corrected syntax for secrets
+      #     FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+      #     FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
+      #     FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
+      #     FOD_APPVERSION: SalesforceQA:test 
+      #     FOD_SCAN_TARGET: ./force-app/main/default/classes
+      #     DO_WAIT: true
+      #     DO_EXPORT: true
+
+      # - name: Test FoD Login
+      #   run: |
+      #       echo "Testing FoD login..."
+      #       RESPONSE=$(curl -s -X POST "$FOD_API/oauth/token" \
+      #       -H "Content-Type: application/x-www-form-urlencoded" \
+      #       -d "grant_type=password" \
+      #       -d "username=$FOD_USER" \
+      #       -d "password=$FOD_PASSWORD" \
+      #       -d "tenant=$FOD_TENANT")
+    
+      #       echo "Response from FoD API:"
+      #       echo $RESPONSE
+
+      #       if echo "$RESPONSE" | grep -q "access_token"; then
+      #           echo " Login successful!"
+      #        else
+      #          echo " Login failed. Check credentials or trial restrictions."
+      #       fi
+      #   env:
+      #     FOD_API: https://api.trial.fortify.com
+      #     FOD_TENANT: ${{ secrets.FORTIFY_TENANT }}
+      #     FOD_USER: ${{ secrets.FORTIFY_USERNAME }}
+      #     FOD_PASSWORD: ${{ secrets.FORTIFY_PASSWORD }}
 
        
 
