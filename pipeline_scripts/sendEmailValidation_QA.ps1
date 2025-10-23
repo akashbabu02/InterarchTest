@@ -145,7 +145,7 @@ $body += @"
 </html>
 "@
 
-$header = @"
+$header = @" 
 <style>BODY{font-family: Arial; font-size: 13pt; color:black;}
 TABLE {border-width: 1px; border-style: solid; border-color: black; border-collapse: collapse;}
 TH {border-width: 1px; padding: 3px; border-style: solid; border-color: black; }

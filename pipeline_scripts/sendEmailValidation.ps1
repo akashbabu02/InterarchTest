@@ -96,7 +96,7 @@ $securePassword = $password | ConvertTo-SecureString -AsPlainText -Force
 $sendAddress = "$env:gitAuthorEmail"
 
 $to     =  $sendAddress
-$Cc   =  "aeroadithiyan3@gmail.com"21121
+$Cc   =  "aeroadithiyan3@gmail.com"
 $from    =  $env:USERNAME
 $mail = New-Object System.Net.Mail.Mailmessage $from, $to, $subject, $body
 $mail.cc.Add($Cc)
