@@ -207,6 +207,12 @@ jobs:
         run:
              bash ./pipeline_scripts/email.sh
 
+      - name: Get GitHub API Response
+        shell: pwsh
+        env:
+           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           GIT_SERVER_URL: "https://api.github.com/repos/"
+        run: ./pipeline_scripts/getRepoInfo.ps1
 
 
 
