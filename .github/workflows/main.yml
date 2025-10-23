@@ -205,7 +205,7 @@ jobs:
          SMTP_PASS: ${{ secrets.SMTP_PASS }}
         shell: bash
         run:
-             ./pipeline_scripts/email.sh
+             bash ./pipeline_scripts/email.sh
 
 
 
