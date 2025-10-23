@@ -77,7 +77,7 @@ jobs:
           }
 
           # Install sfdx-git-delta plugin
-          Write-Host "Installing sfdx-git-delta..."
+          Write-Host "Installing sfdx-git-delta..." 
           echo y | sfdx plugins:install sfdx-git-delta
 
           # Generate delta
