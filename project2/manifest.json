@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Salesforce Event Tracker",
+  "version": "1.0.0",
+  "description": "Captures Salesforce UI events and sends them to GA4",
+  "permissions": [
+    "scripting",
+    "activeTab",
+    "tabs",
+    "storage",
+    "cookies",
+    "identity"
+  ],
+ "host_permissions": [
+  "https://*.salesforce.com/*",
+  "https://*.lightning.force.com/*",
+  "https://*.force.com/*",
+  "https://*.my.salesforce.com/*",
+  "https://www.google-analytics.com/*",
+  "https://www.googletagmanager.com/*",
+  "https://minusculetechnologiespvtltd--byom.sandbox.my.salesforce.com/*"  
+],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.salesforce.com/*",
+        "https://*.lightning.force.com/*",
+        "https://*.force.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "inject-ga-sender.js",
+        "ga4.js"
+      ],
+      "matches": [
+        "https://*.salesforce.com/*",
+        "https://*.lightning.force.com/*",
+        "https://*.force.com/*"
+      ]
+    }
+  ]
+}
